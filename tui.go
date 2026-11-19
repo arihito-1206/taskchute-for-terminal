@@ -215,8 +215,11 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 		}
 		parts := strings.Fields(input)
 		cmd, args := parts[0], parts[1:]
+		if cmd == "code" && len(args) == 1 {
+			args = []string{"@", args[0]}
+		}
 		for i, arg := range args {
-			if cmd != "add" && arg == "@" {
+			if cmd != "add" && (cmd != "code" || i == 0) && arg == "@" {
 				target := m.target()
 				if target == nil {
 					m.notice = "No task selected."
@@ -496,7 +499,11 @@ func (m terminal) render(width int) string {
 		}
 	}
 	if t := m.data.running(); t != nil && len(t.Sessions) > 0 {
-		line("  Started " + timeLabel(t.Sessions[0].Start, m.day, m.now.Location()) + " | Est. " + estimateLabel(t.Minutes))
+		details := "  Started " + timeLabel(t.Sessions[0].Start, m.day, m.now.Location()) + " | Est. " + estimateLabel(t.Minutes)
+		if t.WorkCode != "" {
+			details += " | Code " + terminalText(t.WorkCode, false)
+		}
+		line(details)
 		if bar := estimateProgress(t, m.now, width); bar != "" {
 			fmt.Fprintln(&b, "  "+bar)
 		}

@@ -70,7 +70,18 @@ func row(t *task, day string, now time.Time, width int) string {
 	if t.RoutineID != "" {
 		name = "[R] " + name
 	}
-	name = runewidth.FillRight(runewidth.Truncate(name, width, "..."), width)
+	if t.WorkCode == "" {
+		name = runewidth.Truncate(name, width, "...")
+	} else {
+		code := "[" + terminalText(t.WorkCode, false) + "]"
+		if runewidth.StringWidth(code) >= width {
+			name = runewidth.Truncate(code, width, "...")
+		} else {
+			available := width - runewidth.StringWidth(code) - 1
+			name = strings.TrimSpace(runewidth.Truncate(name, available, "...") + " " + code)
+		}
+	}
+	name = runewidth.FillRight(name, width)
 	return fmt.Sprintf("%-7s  %s  %6s  %-11s  %-11s  %s", label, name, estimateLabel(t.Minutes), start, end, duration(elapsed(t, now)))
 }
 

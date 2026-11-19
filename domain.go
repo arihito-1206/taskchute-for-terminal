@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const dateLayout = "2006-01-02"
@@ -43,6 +44,7 @@ type task struct {
 	Minutes   *float64  `json:"minutes"`
 	Sessions  []session `json:"sessions"`
 	Notes     []note    `json:"notes,omitempty"`
+	WorkCode  string    `json:"work_code,omitempty"`
 	Category  string    `json:"category,omitempty"`
 	RoutineID string    `json:"routine_id,omitempty"`
 	Deleted   bool      `json:"deleted,omitempty"`
@@ -339,6 +341,16 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 				t.Category = value
 			case "note":
 				t.Notes = append(t.Notes, note{Text: value, At: now})
+			}
+		case "code":
+			if len(args) != 1 || args[0] == "" || strings.ContainsFunc(args[0], func(r rune) bool {
+				return unicode.IsSpace(r) || unicode.IsControl(r)
+			}) {
+				return errors.New("use code ID CODE or code ID -")
+			}
+			t.WorkCode = args[0]
+			if t.WorkCode == "-" {
+				t.WorkCode = ""
 			}
 		case "estimate":
 			if len(args) != 1 {

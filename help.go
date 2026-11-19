@@ -19,6 +19,7 @@ var commandGuides = []commandGuide{
 	{"rename @ TITLE", "rename @ Read a chapter"},
 	{"estimate @ MIN|-", "estimate @ 15  /  - clears"},
 	{"category @ NAME|-", "work / home / study / rest / - clears"},
+	{"code CODE|-", "Set work code on the current task / - clears"},
 	{"note @ TEXT", "note @ Finished the first draft"},
 	{"set-start @ HHMM", "set-start @ 0930"},
 	{"set-end @ HHMM|-", "set-end @ 1845  /  - resumes"},
