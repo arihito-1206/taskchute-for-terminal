@@ -1,0 +1,87 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+type commandGuide struct{ syntax, hint string }
+
+var commandGuides = []commandGuide{
+	{"add [MIN] TITLE", "add Read  /  add 15 Read"},
+	{"start [ID]", "Start the next task, or choose one by ID."},
+	{"done", "Finish the running task."},
+	{"pause", "Pause the running task."},
+	{"ls", "Show today's task list."},
+	{"status", "Show the focus view."},
+	{"rename @ TITLE", "rename @ Read a chapter"},
+	{"estimate @ MIN|-", "estimate @ 15  /  - clears"},
+	{"category @ NAME|-", "work / home / study / rest / - clears"},
+	{"note @ TEXT", "note @ Finished the first draft"},
+	{"set-start @ HHMM", "set-start @ 0930"},
+	{"set-end @ HHMM|-", "set-end @ 1845  /  - resumes"},
+	{"reset @", "Clear recorded times and return to Pending."},
+	{"move @ before|after ID", "Reorder a pending task."},
+	{"routine @ DAYS [MIN]", "routine @ daily 15  /  routine @ mon,wed"},
+	{"routine-move ID up|down", "Change the routine order."},
+	{"delete ID...", "Delete tasks together."},
+	{"undo-delete", "Restore the latest deletion."},
+	{"routines", "Open the routine list."},
+	{"help", "Open keyboard and command help."},
+}
+
+func commandUsage(input string) string {
+	words := strings.Fields(input)
+	if len(words) == 0 {
+		return "Type a command, e.g. add 15 Read"
+	}
+	for _, guide := range commandGuides {
+		name, _, _ := strings.Cut(guide.syntax, " ")
+		if name == words[0] {
+			return guide.syntax + "    " + guide.hint
+		}
+	}
+	return "Type help for commands"
+}
+
+var helpLines = func() []string {
+	lines := []string{
+		"TASKS",
+		"  s / Enter   Start or finish", "  p           Pause", "  a           Add a task", "  n           Open task notes",
+		"", "LIST", "  l           Toggle task list", "  j / k       Select next / previous", "  J / K       Move a pending task", "  g / G       First / last task",
+		"  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
+		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  c           Set category", "  u           Reset to Pending",
+		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  : or i      Enter a command", "  q           Quit",
+		"", "COMMANDS   @ = selected task",
+	}
+	for _, guide := range commandGuides {
+		lines = append(lines, "  "+guide.syntax)
+	}
+	return lines
+}()
+
+func (m terminal) helpRows() int {
+	height := m.height
+	if height == 0 {
+		height = 24
+	}
+	return max(1, height-2)
+}
+
+func (m terminal) helpView(width int) string {
+	rows := m.helpRows()
+	first := min(m.helpOffset, max(0, len(helpLines)-rows))
+	lines := []string{fmt.Sprintf("HELP   %d-%d / %d", first+1, min(first+rows, len(helpLines)), len(helpLines))}
+	lines = append(lines, helpLines[first:min(first+rows, len(helpLines))]...)
+	lines = append(lines, "j/k scroll   Esc close")
+	for i, line := range lines {
+		line = ansi.Truncate(line, width, "…")
+		if i == 0 || (i < len(lines)-1 && line != "" && !strings.HasPrefix(line, " ")) {
+			line = "\x1b[1;36m" + line + "\x1b[0m"
+		}
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
+}

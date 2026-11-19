@@ -1,0 +1,150 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/mattn/go-runewidth"
+)
+
+func duration(d time.Duration) string {
+	seconds := int64(d / time.Second)
+	return fmt.Sprintf("%02d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
+}
+
+func estimateLabel(m *float64) string {
+	if m == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%gm", *m)
+}
+
+// Treat stored text as terminal content, never as terminal instructions.
+func terminalText(value string, multiline bool) string {
+	return strings.Map(func(r rune) rune {
+		if multiline && r == '\n' {
+			return r
+		}
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, value)
+}
+
+func title(t *task) string {
+	icon := map[string]string{"work": "💼", "仕事": "💼", "home": "🏠", "家事": "🏠", "study": "📚", "学習": "📚", "rest": "☕", "休憩": "☕"}[strings.ToLower(t.Category)]
+	if t.Category != "" && icon == "" {
+		icon = "🏷"
+	}
+	if icon != "" {
+		return icon + " " + terminalText(t.Title, false)
+	}
+	return terminalText(t.Title, false)
+}
+
+func timeLabel(t time.Time, day string, location *time.Location) string {
+	t = t.In(location)
+	if t.Format(dateLayout) != day {
+		return t.Format("01/02 15:04")
+	}
+	return t.Format("15:04")
+}
+
+func row(t *task, day string, now time.Time, width int) string {
+	label := map[string]string{"pending": "Pending", "running": "Running", "done": "Done"}[t.State]
+	start, end := "-", "-"
+	if len(t.Sessions) > 0 {
+		start = timeLabel(t.Sessions[0].Start, day, now.Location())
+		last := t.Sessions[len(t.Sessions)-1]
+		if t.State == "done" && last.End != nil {
+			end = timeLabel(*last.End, day, now.Location())
+		}
+		if t.State == "pending" {
+			label = "Paused"
+		}
+	}
+	name := title(t)
+	if t.RoutineID != "" {
+		name = "[R] " + name
+	}
+	name = runewidth.FillRight(runewidth.Truncate(name, width, "..."), width)
+	return fmt.Sprintf("%-7s  %s  %6s  %-11s  %-11s  %s", label, name, estimateLabel(t.Minutes), start, end, duration(elapsed(t, now)))
+}
+
+type taskOutput struct {
+	*task
+	Elapsed   float64  `json:"elapsed_seconds"`
+	Remaining *float64 `json:"remaining_seconds"`
+}
+
+type output struct {
+	Day       string       `json:"day"`
+	Tasks     []taskOutput `json:"tasks"`
+	Running   *taskOutput  `json:"running"`
+	Next      *taskOutput  `json:"next"`
+	Remaining float64      `json:"remaining_seconds"`
+	Unknown   int          `json:"unestimated_count"`
+	Finish    time.Time    `json:"finish_at"`
+	Available bool         `json:"forecast_available"`
+	Routines  []routine    `json:"routines"`
+}
+
+func formatTask(t *task, now time.Time) taskOutput {
+	item := taskOutput{task: t, Elapsed: elapsed(t, now).Seconds()}
+	if t.State == "done" || t.Minutes != nil {
+		left := 0.0
+		if t.State != "done" {
+			left = max(0, *t.Minutes*60-item.Elapsed)
+		}
+		item.Remaining = &left
+	}
+	return item
+}
+
+func (s *state) output(day string, now time.Time) output {
+	o := output{Day: day, Tasks: []taskOutput{}, Routines: []routine{}, Available: day == now.Format(dateLayout)}
+	for _, id := range s.Order {
+		o.Routines = append(o.Routines, s.Routines[id])
+	}
+	for _, t := range s.rows(day) {
+		item := formatTask(t, now)
+		o.Tasks = append(o.Tasks, item)
+		if t.State == "pending" && o.Next == nil {
+			o.Next = &item
+		}
+		if item.Remaining == nil {
+			o.Unknown++
+		} else {
+			o.Remaining += *item.Remaining
+		}
+	}
+	if t := s.running(); t != nil {
+		item := formatTask(t, now)
+		o.Running = &item
+		o.Available = o.Available && t.Day == day
+	}
+	o.Finish = now.Add(time.Duration(o.Remaining * float64(time.Second)))
+	return o
+}
+
+func summary(s *state, day string, now time.Time) string {
+	o := s.output(day, now)
+	focus := "Ready"
+	if o.Running != nil {
+		focus = title(o.Running.task) + "    " + duration(elapsed(o.Running.task, now))
+	}
+	next, finish := "-", "-"
+	if o.Next != nil {
+		next = title(o.Next.task) + " / " + estimateLabel(o.Next.Minutes)
+	}
+	if o.Available {
+		finish = timeLabel(o.Finish, day, now.Location())
+		if o.Unknown > 0 {
+			finish += fmt.Sprintf(" (+%d unestimated)", o.Unknown)
+		}
+	}
+	return fmt.Sprintf("%s\nNext %s | Day ends %s", focus, next, finish)
+}
