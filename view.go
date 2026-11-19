@@ -35,7 +35,7 @@ func terminalText(value string, multiline bool) string {
 }
 
 func title(t *task) string {
-	icon := map[string]string{"work": "💼", "仕事": "💼", "home": "🏠", "家事": "🏠", "study": "📚", "学習": "📚", "rest": "☕", "休憩": "☕"}[strings.ToLower(t.Category)]
+	icon := map[string]string{"work": "💼", "仕事": "💼", "home": "🏠", "家事": "🏠", "hobby": "🎨", "趣味": "🎨", "study": "📚", "学習": "📚", "rest": "☕", "休憩": "☕"}[strings.ToLower(t.Category)]
 	if t.Category != "" && icon == "" {
 		icon = "🏷"
 	}

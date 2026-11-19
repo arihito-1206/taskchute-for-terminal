@@ -433,7 +433,7 @@ func (m *terminal) normalKey(key string) bool {
 		}
 		m.mode, m.input, m.notice = "command", prefix, ""
 		if key == "c" {
-			m.notice = "💼 work / 仕事   🏠 home / 家事   📚 study / 学習   ☕ rest / 休憩 | - clears"
+			m.notice = "💼 work / 仕事   🏠 home / 家事   🎨 hobby / 趣味   ☕ rest / 休憩 | - clears"
 		}
 
 	}

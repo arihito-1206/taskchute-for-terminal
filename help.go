@@ -18,7 +18,7 @@ var commandGuides = []commandGuide{
 	{"status", "Show the focus view."},
 	{"rename @ TITLE", "rename @ Read a chapter"},
 	{"estimate @ MIN|-", "estimate @ 15  /  - clears"},
-	{"category @ NAME|-", "work / home / study / rest / - clears"},
+	{"category @ NAME|-", "work / home / hobby / rest / - clears"},
 	{"code CODE|-", "Set work code on the current task / - clears"},
 	{"note @ TEXT", "note @ Finished the first draft"},
 	{"set-start @ HHMM", "set-start @ 0930"},
