@@ -392,8 +392,13 @@ func (m *terminal) normalKey(key string) bool {
 		}
 		if target.State == "running" {
 			m.execute("done")
-		} else {
-			m.execute("start", target.ID)
+		} else if m.execute("start", target.ID) && target.State == "done" {
+			for i, row := range m.data.rows(m.day) {
+				if row.State == "running" {
+					m.selected = i
+					break
+				}
+			}
 		}
 	case "p":
 		m.execute("pause")

@@ -219,6 +219,15 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 				}
 			}
 		}
+		if t != nil && t.State == "done" {
+			copy := *t
+			copy.ID = identifier()
+			copy.State = "pending"
+			copy.Sessions = nil
+			copy.Notes = nil
+			t = &copy
+			s.Tasks = append(s.Tasks, t)
+		}
 		if t == nil || t.State != "pending" {
 			return errors.New("select a pending task")
 		}

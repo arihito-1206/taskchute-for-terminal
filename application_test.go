@@ -74,3 +74,36 @@ func TestInvalidSnapshot(t *testing.T) {
 		}
 	}
 }
+
+func TestStartDoneTaskCreatesNewRun(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	started := now.Add(-time.Hour)
+	ended := now.Add(-time.Minute)
+	minutes := 30.0
+	original := &task{
+		ID: "original", Day: day, Title: "Read", State: "done", Minutes: &minutes,
+		WorkCode: "PJ-042", Category: "work", RoutineID: "routine-1",
+		Sessions: []session{{Start: started, End: &ended}}, Notes: []note{{Text: "finished a chapter"}},
+	}
+	s := &state{Tasks: []*task{original}}
+	if err := s.apply(day, "start", []string{original.ID}, now); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Tasks) != 2 {
+		t.Fatalf("got %d tasks", len(s.Tasks))
+	}
+	restarted := s.running()
+	if restarted == nil || restarted.ID == original.ID || restarted.Title != original.Title ||
+		restarted.Day != day || restarted.WorkCode != original.WorkCode || restarted.Category != original.Category ||
+		restarted.RoutineID != original.RoutineID || restarted.Minutes == nil || *restarted.Minutes != minutes {
+		t.Fatalf("incorrect task copy: %+v", restarted)
+	}
+	if len(restarted.Notes) != 0 || len(restarted.Sessions) != 1 ||
+		!restarted.Sessions[0].Start.Equal(now) || restarted.Sessions[0].End != nil {
+		t.Fatal("new run inherited old history")
+	}
+	if original.State != "done" || len(original.Notes) != 1 || len(original.Sessions) != 1 || original.Sessions[0].End == nil {
+		t.Fatal("original history changed")
+	}
+}

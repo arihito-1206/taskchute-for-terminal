@@ -11,7 +11,7 @@ type commandGuide struct{ syntax, hint string }
 
 var commandGuides = []commandGuide{
 	{"add [MIN] TITLE", "add Read  /  add 15 Read"},
-	{"start [ID]", "Start the next task, or choose one by ID."},
+	{"start [ID]", "Start next or by ID. A done task starts a copy."},
 	{"done", "Finish the running task."},
 	{"pause", "Pause the running task."},
 	{"ls", "Show today's task list."},
@@ -50,7 +50,7 @@ func commandUsage(input string) string {
 var helpLines = func() []string {
 	lines := []string{
 		"TASKS",
-		"  s / Enter   Start or finish", "  p           Pause", "  a           Add a task", "  n           Open task notes",
+		"  s / Enter   Start or finish", "              On Done, start a copy", "  p           Pause", "  a           Add a task", "  n           Open task notes",
 		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task", "  g / G       First / last task",
 		"  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
 		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  c           Set category", "  u           Reset to Pending",
