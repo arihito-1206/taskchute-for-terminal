@@ -8,7 +8,17 @@ go run . --json ls
 go build -o tc .
 ```
 
-実績は OS のユーザー設定フォルダ内の `taskchute-for-terminal/tasks.json` に保存します。別の保存先は `--data PATH` または `TASKCHUTE_DATA` で指定できます。オプションはコマンドより前に置きます。
+保存先の優先順は `--data PATH` → 環境変数 `TASKCHUTE_DATA` → `config.json` の `data_path` → 従来の `tasks.json` です。オプションはコマンドより前に置きます。
+
+`config.json` は OS のユーザー設定フォルダ内の `taskchute-for-terminal` に置きます。macOS では `~/Library/Application Support/taskchute-for-terminal/config.json` です。
+
+```json
+{
+  "data_path": "/Users/yourname/Dev/git_repos/taskchute-data/tasks.json"
+}
+```
+
+相対パスは設定ファイルのフォルダを基準に解決します。設定した保存先は TUI、CLI、`backup`、`restore-backup` に共通です。設定ファイルや `data_path` を省略した場合は、同じフォルダの `tasks.json` を使います。
 
 ## 操作
 

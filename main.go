@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -20,18 +19,18 @@ delete ID... | undo-delete | import-python PATH
 backup | restore-backup`
 
 func run() error {
-	config, err := os.UserConfigDir()
-	if err != nil {
-		return err
-	}
-	defaultData := os.Getenv("TASKCHUTE_DATA")
-	if defaultData == "" {
-		defaultData = filepath.Join(config, "taskchute-for-terminal", "tasks.json")
-	}
-	data := flag.String("data", defaultData, "path to local JSON data")
+	data := flag.String("data", "", "path to local JSON data (overrides TASKCHUTE_DATA and config.json)")
 	day := flag.String("day", "", "date (YYYY-MM-DD; default today)")
 	machine := flag.Bool("json", false, "machine-readable output")
 	flag.Parse()
+	if flag.Arg(0) == "help" {
+		fmt.Println(commands)
+		return nil
+	}
+	path, err := resolveDataPath(*data)
+	if err != nil {
+		return err
+	}
 	now := time.Now()
 	if *day == "" {
 		*day = now.Format(dateLayout)
@@ -39,7 +38,7 @@ func run() error {
 	if _, err = time.Parse(dateLayout, *day); err != nil {
 		return errors.New("invalid --day (use YYYY-MM-DD)")
 	}
-	repo := repository{path: *data}
+	repo := repository{path: path}
 	app := application{store: repo}
 	if flag.NArg() == 0 || flag.Arg(0) == "shell" {
 		if *machine {
@@ -57,10 +56,6 @@ func run() error {
 		return err
 	}
 	cmd, args := flag.Arg(0), flag.Args()[1:]
-	if cmd == "help" {
-		fmt.Println(commands)
-		return nil
-	}
 	if cmd == "backup" || cmd == "restore-backup" {
 		if len(args) != 0 {
 			return errors.New("backup commands take no arguments")
