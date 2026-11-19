@@ -198,6 +198,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 		}
 		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}})
 	case "start":
+		if day > now.Format(dateLayout) {
+			return errors.New("cannot start a task scheduled for a future day")
+		}
 		if len(args) > 1 {
 			return invalid
 		}
@@ -409,6 +412,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 				return errors.New("task has no end time")
 			}
 			if args[0] == "-" {
+				if t.Day > now.Format(dateLayout) {
+					return errors.New("cannot resume a task scheduled for a future day")
+				}
 				if running != nil {
 					return errors.New("finish or pause the running task first")
 				}
