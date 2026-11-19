@@ -50,7 +50,7 @@ var helpLines = func() []string {
 	lines := []string{
 		"TASKS",
 		"  s / Enter   Start or finish", "  p           Pause", "  a           Add a task", "  n           Open task notes",
-		"", "LIST", "  l           Toggle task list", "  j / k       Select next / previous", "  J / K       Move a pending task", "  g / G       First / last task",
+		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task", "  g / G       First / last task",
 		"  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
 		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  c           Set category", "  u           Reset to Pending",
 		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  : or i      Enter a command", "  q           Quit",

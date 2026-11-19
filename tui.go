@@ -16,6 +16,7 @@ import (
 type clockMsg time.Time
 
 type terminal struct {
+	timelineOffset                                       int
 	helpOffset                                           int
 	suggestion                                           int
 	app                                                  application
@@ -279,6 +280,10 @@ func (m *terminal) routineKey(key string) {
 }
 
 func (m *terminal) normalKey(key string) bool {
+	if m.mode == "timeline" {
+		m.timelineKey(key)
+		return false
+	}
 	if m.mode == "help" {
 		switch key {
 		case "down", "j":
@@ -401,6 +406,8 @@ func (m *terminal) normalKey(key string) bool {
 		m.mode = "routines"
 		m.routineIndex = 0
 		m.notice = ""
+	case "t":
+		m.mode, m.timelineOffset = "timeline", 0
 	case "?":
 		m.mode, m.helpOffset = "help", 0
 	case "n":
@@ -467,6 +474,9 @@ func (m terminal) View() tea.View {
 }
 
 func (m terminal) render(width int) string {
+	if m.mode == "timeline" {
+		return m.timelineView(width)
+	}
 	if m.mode == "help" {
 		return m.helpView(width)
 	}
@@ -530,7 +540,7 @@ func (m terminal) render(width int) string {
 			}
 		}
 	default:
-		line("  s start/finish | n note | l list | v routines | a add | ? help | q quit")
+		line("  s start/finish | n note | l list | t timeline | a add | ? help | q quit")
 		if m.list {
 			titleWidth := max(8, min(60, width-56))
 			line(fmt.Sprintf("  %-7s  %-*s     EST  %-11s  %-11s  ELAPSED", "STATE", titleWidth, "TASK", "START", "END"))
