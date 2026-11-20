@@ -311,7 +311,7 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *terminal) edit(key tea.KeyPressMsg) {
-	prefix, matches := m.inputSuggestions()
+	matches := m.inputSuggestions()
 	if len(matches) > 0 {
 		switch key.String() {
 		case "down", "up":
@@ -322,7 +322,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			m.suggestion = (m.suggestion + step + len(matches)) % len(matches)
 			return
 		case "tab":
-			m.input = prefix + matches[m.suggestion%len(matches)]
+			m.input = matches[m.suggestion%len(matches)].input
 			m.inputCursor = len(m.input)
 			m.suggestion = 0
 			return
@@ -974,14 +974,14 @@ func (m terminal) render(width int) string {
 		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)
-		if _, matches := m.inputSuggestions(); len(matches) > 0 {
+		if matches := m.inputSuggestions(); len(matches) > 0 {
 			line("  Tab completes | Up/Down select")
 			for i, name := range matches {
 				marker := "    "
 				if i == m.suggestion%len(matches) {
 					marker = "  > "
 				}
-				line(marker + name)
+				line(marker + name.label)
 			}
 		}
 	default:
@@ -1159,35 +1159,40 @@ func (m terminal) renderNote(width int) (string, *tea.Cursor) {
 	return strings.Join(background, "\n"), cursor
 }
 
-func (m terminal) inputSuggestions() (string, []string) {
+type inputSuggestion struct {
+	label string
+	input string
+}
+
+func (m terminal) inputSuggestions() []inputSuggestion {
 	if m.mode == "search" || m.endEdit.task != nil {
-		return "", nil
+		return nil
 	}
 	if m.fieldEdit != nil {
 		if m.fieldEdit.field == "code" {
-			return "", m.workCodeSuggestions(m.input)
+			return m.workCodeSuggestions("", m.input)
 		}
-		return "", nil
+		return nil
 	}
 	command, body, found := strings.Cut(m.input, " ")
 	if found && (command == "code" || command == "routine-code") {
 		body = strings.TrimLeft(body, " ")
 		target, query, separated := strings.Cut(body, " ")
 		if command == "code" && !separated && target != "@" {
-			return "code @ ", m.workCodeSuggestions(target)
+			return m.workCodeSuggestions("code @ ", target)
 		}
 		if target != "" && (separated || target == "@") {
-			return command + " " + target + " ", m.workCodeSuggestions(query)
+			return m.workCodeSuggestions(command+" "+target+" ", query)
 		}
-		return "", nil
+		return nil
 	}
 	return m.addSuggestions()
 }
 
-func (m terminal) workCodeSuggestions(input string) []string {
+func (m terminal) workCodeSuggestions(prefix, input string) []inputSuggestion {
 	query := strings.ToLower(strings.TrimSpace(input))
 	seen := make(map[string]bool)
-	var matches []string
+	var matches []inputSuggestion
 	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
 		t := m.data.Tasks[i]
 		if t.Deleted || t.Day > m.day || t.WorkCode == "" || strings.ContainsFunc(t.WorkCode, unicode.IsControl) {
@@ -1196,31 +1201,33 @@ func (m terminal) workCodeSuggestions(input string) []string {
 		code := strings.ToLower(t.WorkCode)
 		if !seen[code] && strings.Contains(code, query) {
 			seen[code] = true
-			matches = append(matches, t.WorkCode)
+			matches = append(matches, inputSuggestion{label: t.WorkCode, input: prefix + t.WorkCode})
 		}
 	}
 	return matches
 }
 
-// addSuggestions preserves the optional estimate while completing only the title.
-func (m terminal) addSuggestions() (string, []string) {
+// addSuggestions inherits the estimate unless the user supplied one.
+func (m terminal) addSuggestions() []inputSuggestion {
 	body, ok := strings.CutPrefix(m.input, "add ")
 	if !ok {
-		return "", nil
+		return nil
 	}
 	prefix := "add "
+	explicitEstimate := false
 	body = strings.TrimLeft(body, " ")
 	if first, rest, spaced := strings.Cut(body, " "); spaced {
 		if _, err := minutes(first); err == nil {
 			prefix += first + " "
+			explicitEstimate = true
 			body = strings.TrimLeft(rest, " ")
 		}
 	}
 	if body == "" {
-		return "", nil
+		return nil
 	}
 	query := strings.ToLower(body)
-	var matches []string
+	var matches []inputSuggestion
 	seen := map[string]bool{}
 	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
 		t := m.data.Tasks[i]
@@ -1230,8 +1237,15 @@ func (m terminal) addSuggestions() (string, []string) {
 		name := strings.ToLower(t.Title)
 		if !seen[name] && strings.HasPrefix(name, query) {
 			seen[name] = true
-			matches = append(matches, t.Title)
+			candidate := inputSuggestion{label: t.Title, input: prefix + t.Title}
+			if t.Minutes != nil {
+				candidate.label += " · " + estimateLabel(t.Minutes)
+				if !explicitEstimate {
+					candidate.input = fmt.Sprintf("add %g %s", *t.Minutes, t.Title)
+				}
+			}
+			matches = append(matches, candidate)
 		}
 	}
-	return prefix, matches
+	return matches
 }

@@ -66,12 +66,14 @@ func TestCanceledUpdateDiscardsMutations(t *testing.T) {
 }
 
 func TestSuggestions(t *testing.T) {
+	estimate := 30.0
 	m := terminal{day: "2026-11-20", input: "add 15 re", data: &state{Tasks: []*task{
-		{Title: "Read"}, {Title: "read"}, {Title: "Review"}, {Title: "Removed", Deleted: true}, {Title: "Reserved", Day: "2027-01-01"},
+		{Title: "Read"}, {Title: "read", Minutes: &estimate}, {Title: "Review"}, {Title: "Removed", Deleted: true}, {Title: "Reserved", Day: "2027-01-01"},
 	}}}
-	prefix, matches := m.addSuggestions()
-	if prefix != "add 15 " || len(matches) != 2 || matches[0] != "Review" || matches[1] != "read" {
-		t.Fatal(prefix, matches)
+	history := m.data
+	matches := m.addSuggestions()
+	if len(matches) != 2 || matches[0].label != "Review" || matches[1].label != "read · 30m" {
+		t.Fatal(matches)
 	}
 	m.edit(tea.KeyPressMsg{Code: tea.KeyDown})
 	m.edit(tea.KeyPressMsg{Code: tea.KeyTab})
@@ -90,7 +92,18 @@ func TestSuggestions(t *testing.T) {
 	if task.Title != "read" || task.Minutes == nil || *task.Minutes != 15 {
 		t.Fatal(task)
 	}
-
+	m.data = history
+	for _, tc := range []struct{ input, want string }{
+		{"add rea", "add 30 read"},
+		{"add - rea", "add - read"},
+		{"add rev", "add Review"},
+	} {
+		m.input, m.inputCursor = tc.input, len(tc.input)
+		m.edit(tea.KeyPressMsg{Code: tea.KeyTab})
+		if m.input != tc.want {
+			t.Errorf("completing %q produced %q, want %q", tc.input, m.input, tc.want)
+		}
+	}
 }
 
 func TestCommandCursorEditsAndSavesMultibyteInput(t *testing.T) {
