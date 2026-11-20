@@ -18,8 +18,17 @@ type timelineEntry struct {
 func (m terminal) timelineEntries() []timelineEntry {
 	var entries []timelineEntry
 	location := m.now.Location()
+	day, err := time.Parse(dateLayout, m.day)
+	if err != nil {
+		return nil
+	}
+	year, month, date := day.Date()
+	onDay := func(interval session) bool {
+		y, m, d := interval.Start.In(location).Date()
+		return y == year && m == month && d == date
+	}
 	for _, task := range m.data.Tasks {
-		if task.Deleted || len(task.Sessions) == 0 {
+		if task.Deleted || !slices.ContainsFunc(task.Sessions, onDay) {
 			continue
 		}
 		segments := make([]timelineEntry, len(task.Sessions))
@@ -38,7 +47,7 @@ func (m terminal) timelineEntries() []timelineEntry {
 			segments[index].notes = append(segments[index].notes, note)
 		}
 		for _, entry := range segments {
-			if entry.Start.In(location).Format(dateLayout) == m.day {
+			if onDay(entry.session) {
 				entries = append(entries, entry)
 			}
 		}
