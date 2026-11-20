@@ -246,11 +246,11 @@ func TestRoutineWorkCodeIsInheritedByNewTasks(t *testing.T) {
 		t.Fatalf("generated task has work code %q", next.WorkCode)
 	}
 	execute(second, "rename", next.ID, "Read tomorrow")
-	if _, err := app.execute(t.Context(), first, "routine-code", []string{routineID, "invalid code"}, now); err == nil {
-		t.Fatal("accepted whitespace in a routine work code")
+	if _, err := app.execute(t.Context(), first, "routine-code", []string{routineID, "invalid\ncode"}, now); err == nil {
+		t.Fatal("accepted a control character in a routine work code")
 	}
-	execute(first, "routine-code", routineID, "PJ-043")
-	if got := execute(third, "ls").rows(third)[0].WorkCode; got != "PJ-043" {
+	execute(first, "routine-code", routineID, "PJ 043")
+	if got := execute(third, "ls").rows(third)[0].WorkCode; got != "PJ 043" {
 		t.Fatalf("generated task did not inherit updated work code: %q", got)
 	}
 	if got := execute(second, "ls").rows(second)[0].WorkCode; got != "PJ-042" {

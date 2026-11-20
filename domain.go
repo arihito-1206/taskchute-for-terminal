@@ -81,15 +81,17 @@ type state struct {
 }
 
 func parseWorkCode(cmd string, args []string) (string, error) {
-	if len(args) != 1 || args[0] == "" || strings.ContainsFunc(args[0], func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.IsControl(r)
-	}) {
+	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
 		return "", fmt.Errorf("use %s ID CODE or %s ID -", cmd, cmd)
 	}
-	if args[0] == "-" {
+	if strings.ContainsFunc(args[0], unicode.IsControl) {
+		return "", errors.New("work code cannot contain control characters")
+	}
+	code := strings.TrimSpace(args[0])
+	if code == "-" {
 		return "", nil
 	}
-	return args[0], nil
+	return code, nil
 }
 
 func identifier() string {

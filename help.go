@@ -18,7 +18,7 @@ var commandGuides = []commandGuide{
 	{"rename @ TITLE", "rename @ Read a chapter"},
 	{"estimate @ MIN|-", "estimate @ 15  /  - clears"},
 	{"category @ NAME|-", "work / home / hobby / rest / - clears"},
-	{"code CODE|-", "Set work code on the current task / - clears"},
+	{"code [@|ID] CODE|-", "Use code @ HubSpot Design for spaces / - clears"},
 	{"note @ TEXT", "note @ Finished the first draft"},
 	{"set-start @ HHMM", "set-start @ 0930"},
 	{"set-end @ HHMM|- [INTERVAL]", "Edit an interval end (1-based, default last) / - resumes the last"},

@@ -13,7 +13,7 @@ import (
 func sectionPress(m terminal, keys ...rune) terminal {
 	for _, code := range keys {
 		key := tea.KeyPressMsg{Code: code}
-		if code > 0 && code < 127 && code != tea.KeyEnter && code != tea.KeyEsc {
+		if code > 0 && code < 127 && code != tea.KeyEnter && code != tea.KeyEsc && code != tea.KeyTab {
 			key.Text = string(code)
 		}
 		next, _ := m.Update(key)
@@ -310,19 +310,31 @@ func TestCountedTaskFields(t *testing.T) {
 	}
 	m := terminal{app: application{store: repo, sections: []section{{ID: "am"}, {ID: "pm"}}}, day: day, now: now, data: s, list: true, sectionID: "am"}
 	m = sectionPress(m, '2', 'c', 'h', 'o', 'm', 'e', tea.KeyEnter)
-	m = sectionPress(m, '9', 'C', 'P', '1', tea.KeyEnter)
+	m = sectionPress(m, '9', 'C', 'P', ' ', '1', tea.KeyEnter)
 	m = sectionPress(m, '2', 'C', '-', tea.KeyEsc)
 	saved, err := repo.load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, task := range saved.Tasks {
-		if task.SectionID == "am" && (task.Category != "home" || task.WorkCode != "P1") {
+		if task.SectionID == "am" && (task.Category != "home" || task.WorkCode != "P 1") {
 			t.Fatalf("selected task not updated: %+v", task)
 		}
 		if task.SectionID == "pm" && (task.Category != "" || task.WorkCode != "") {
 			t.Fatal("changed filtered task")
 		}
+	}
+	m = sectionPress(m, ':', 'c', 'o', 'd', 'e', ' ', '@', ' ', 'P', ' ', ' ', '2', tea.KeyEnter)
+	if m.mode != "" || m.target().WorkCode != "P  2" {
+		t.Fatalf("explicit target did not preserve spaces: %q", m.notice)
+	}
+	m = sectionPress(m, ':', 'c', 'o', 'd', 'e', ' ', 'P', '3', tea.KeyEnter)
+	if m.mode != "" || m.target().WorkCode != "P3" {
+		t.Fatalf("single-word shorthand no longer works: %q", m.notice)
+	}
+	m = sectionPress(m, 'C', '1', tea.KeyTab, tea.KeyEnter)
+	if m.mode != "" || m.target().WorkCode != "P 1" {
+		t.Fatalf("could not complete a previously used work code: %q", m.notice)
 	}
 }
 

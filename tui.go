@@ -311,7 +311,7 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *terminal) edit(key tea.KeyPressMsg) {
-	prefix, matches := m.addSuggestions()
+	prefix, matches := m.inputSuggestions()
 	if len(matches) > 0 {
 		switch key.String() {
 		case "down", "up":
@@ -389,8 +389,12 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 				return
 			}
 		}
-		if cmd == "code" && len(args) == 1 {
+		switch {
+		case cmd == "code" && len(args) == 1:
 			args = []string{"@", args[0]}
+		case (cmd == "code" || cmd == "routine-code") && len(args) >= 2:
+			body := strings.TrimSpace(strings.TrimPrefix(input, cmd))
+			args = []string{args[0], strings.TrimSpace(strings.TrimPrefix(body, args[0]))}
 		}
 		for i, arg := range args {
 			if cmd != "add" && cmd != "routine-code" && (cmd != "code" || i == 0) && arg == "@" {
@@ -970,7 +974,7 @@ func (m terminal) render(width int) string {
 		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)
-		if _, matches := m.addSuggestions(); len(matches) > 0 {
+		if _, matches := m.inputSuggestions(); len(matches) > 0 {
 			line("  Tab completes | Up/Down select")
 			for i, name := range matches {
 				marker := "    "
@@ -1155,11 +1159,51 @@ func (m terminal) renderNote(width int) (string, *tea.Cursor) {
 	return strings.Join(background, "\n"), cursor
 }
 
-// addSuggestions preserves the optional estimate while completing only the title.
-func (m terminal) addSuggestions() (string, []string) {
-	if m.mode == "search" || m.fieldEdit != nil || m.endEdit.task != nil {
+func (m terminal) inputSuggestions() (string, []string) {
+	if m.mode == "search" || m.endEdit.task != nil {
 		return "", nil
 	}
+	if m.fieldEdit != nil {
+		if m.fieldEdit.field == "code" {
+			return "", m.workCodeSuggestions(m.input)
+		}
+		return "", nil
+	}
+	command, body, found := strings.Cut(m.input, " ")
+	if found && (command == "code" || command == "routine-code") {
+		body = strings.TrimLeft(body, " ")
+		target, query, separated := strings.Cut(body, " ")
+		if command == "code" && !separated && target != "@" {
+			return "code @ ", m.workCodeSuggestions(target)
+		}
+		if target != "" && (separated || target == "@") {
+			return command + " " + target + " ", m.workCodeSuggestions(query)
+		}
+		return "", nil
+	}
+	return m.addSuggestions()
+}
+
+func (m terminal) workCodeSuggestions(input string) []string {
+	query := strings.ToLower(strings.TrimSpace(input))
+	seen := make(map[string]bool)
+	var matches []string
+	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
+		t := m.data.Tasks[i]
+		if t.Deleted || t.Day > m.day || t.WorkCode == "" || strings.ContainsFunc(t.WorkCode, unicode.IsControl) {
+			continue
+		}
+		code := strings.ToLower(t.WorkCode)
+		if !seen[code] && strings.Contains(code, query) {
+			seen[code] = true
+			matches = append(matches, t.WorkCode)
+		}
+	}
+	return matches
+}
+
+// addSuggestions preserves the optional estimate while completing only the title.
+func (m terminal) addSuggestions() (string, []string) {
 	body, ok := strings.CutPrefix(m.input, "add ")
 	if !ok {
 		return "", nil
