@@ -863,10 +863,6 @@ func (m *terminal) normalKey(key string) bool {
 			}
 		}
 		m.openCommand(prefix)
-		if key == "c" {
-			m.notice = "💼 work / 仕事   🏠 home / 家事   🎨 hobby / 趣味   ☕ rest / 休憩 | - clears"
-		}
-
 	}
 	return false
 }
@@ -968,9 +964,11 @@ func (m terminal) render(width int) string {
 	case "routines":
 		m.drawRoutines(line, width)
 	case "command":
+		categoryInput := false
 		if edit := m.endEdit; edit.task != nil {
 			line("  End time (HHMM) | " + m.intervalLabel(edit.task, edit.index))
 		} else if edit := m.fieldEdit; edit != nil {
+			categoryInput = edit.field == "category"
 			line(fmt.Sprintf("  Set %s on %d task(s) | - clears | Esc cancels", edit.field, len(edit.ids)))
 			shown := min(len(edit.titles), max(1, m.room()-2))
 			for _, name := range edit.titles[:shown] {
@@ -982,6 +980,7 @@ func (m terminal) render(width int) string {
 		} else {
 			line("  " + commandUsage(m.input))
 			words := strings.Fields(m.input)
+			categoryInput = len(words) > 0 && words[0] == "category"
 			if len(words) >= 2 && words[1] == "@" && words[0] != "add" && words[0] != "routine-code" {
 				if target := m.targetIn(list); target != nil {
 					line("  @ " + title(target))
@@ -995,6 +994,10 @@ func (m terminal) render(width int) string {
 		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)
+		if categoryInput {
+			line("  💼 work / 仕事 · 🏠 home / 家事 · 🎨 hobby / 趣味 · 📚 study / 学習")
+			line("  ☕ rest / 休憩 · 🍖 meal / 食事 · 👪 family / 家族 | - clears")
+		}
 		if matches := m.inputSuggestions(); len(matches) > 0 {
 			line("  Tab completes | Up/Down select")
 			for i, name := range matches {

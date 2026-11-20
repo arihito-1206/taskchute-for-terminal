@@ -17,7 +17,7 @@ var commandGuides = []commandGuide{
 	{"status", "Show the focus view."},
 	{"rename @ TITLE", "rename @ Read a chapter"},
 	{"estimate @ MIN|-", "estimate @ 15  /  - clears"},
-	{"category @ NAME|-", "work / home / hobby / rest / - clears"},
+	{"category @ NAME|-", "work / home / hobby / rest / meal / family / - clears"},
 	{"code [@|ID] CODE|-", "Use code @ HubSpot Design for spaces / - clears"},
 	{"note @ TEXT", "note @ Finished the first draft"},
 	{"set-start @ HHMM", "set-start @ 0930"},
