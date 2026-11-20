@@ -57,7 +57,7 @@ func clock() tea.Cmd {
 type splashDone struct{}
 
 func (m terminal) Init() tea.Cmd {
-	return tea.Batch(clock(), tea.Tick(450*time.Millisecond, func(time.Time) tea.Msg { return splashDone{} }))
+	return tea.Batch(clock(), tea.Tick(time.Second, func(time.Time) tea.Msg { return splashDone{} }))
 }
 
 func (m *terminal) execute(cmd string, args ...string) bool {
