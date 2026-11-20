@@ -142,15 +142,25 @@ func (s *state) rows(day string) []*task {
 	}
 	order := map[string]int{"done": 0, "running": 1, "pending": 2}
 	slices.SortStableFunc(rows, func(a, b *task) int {
-		if a.State == "done" && b.State == "done" && len(a.Sessions) > 0 && len(b.Sessions) > 0 {
-			x, y := a.Sessions[len(a.Sessions)-1].End, b.Sessions[len(b.Sessions)-1].End
-			if x != nil && y != nil {
-				return x.Compare(*y)
-			}
+		if c := order[a.State] - order[b.State]; c != 0 {
+			return c
 		}
-		return order[a.State] - order[b.State]
+		if a.State == "done" {
+			// Logs without an end time sort first so the order stays transitive.
+			return lastEnd(a).Compare(lastEnd(b))
+		}
+		return 0
 	})
 	return rows
+}
+
+func lastEnd(t *task) time.Time {
+	if len(t.Sessions) > 0 {
+		if end := t.Sessions[len(t.Sessions)-1].End; end != nil {
+			return *end
+		}
+	}
+	return time.Time{}
 }
 
 func (s *state) running() *task {

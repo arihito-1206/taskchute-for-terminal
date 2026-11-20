@@ -72,11 +72,23 @@ func (r repository) load(ctx context.Context) (*state, error) {
 }
 
 func (r repository) save(s *state) error {
-	tmp, err := os.CreateTemp(filepath.Dir(r.path), ".taskchute-")
+	// Replace the file a symlinked data path points to, and keep its mode.
+	path, mode := r.path, os.FileMode(0600)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".taskchute-")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
 	enc := json.NewEncoder(tmp)
 	enc.SetIndent("", "  ")
 	err = enc.Encode(s)
@@ -90,7 +102,15 @@ func (r repository) save(s *state) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Rename(tmp.Name(), r.path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	// Make the rename durable; a failure here does not undo the save.
+	if dir, err := os.Open(filepath.Dir(path)); err == nil {
+		dir.Sync()
+		dir.Close()
+	}
+	return nil
 }
 
 func (r repository) withLock(fn func() error) error {
