@@ -860,6 +860,12 @@ func (m terminal) render(width int) string {
 				switch {
 				case m.sectionID != "" && task.State == "running":
 					fmt.Fprintln(&b, runningBand(prefix+text, min(width, 90)))
+				case task.State == "done":
+					style := "\x1b[38;5;245m"
+					if m.sectionID != "" && i == m.selected {
+						style = "\x1b[38;5;249;48;5;237m"
+					}
+					fmt.Fprintln(&b, style+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
 				case m.sectionID != "" && i == m.selected:
 					fmt.Fprintln(&b, "\x1b[38;5;252;48;5;237m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
 				case task.State == "running":
