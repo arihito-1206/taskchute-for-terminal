@@ -69,7 +69,16 @@ func (m terminal) render(width int) string {
 		return startupMark
 	}
 	var b strings.Builder
-	line := func(s string) { fmt.Fprintln(&b, runewidth.Truncate(terminalText(s, false), max(1, width), "…")) }
+	sectionRule := strings.Repeat("─", max(1, width))
+	line := func(s string) {
+		// Section rules are already sized in terminal columns. Width libraries
+		// can classify the rule glyph as double-width under East Asian settings.
+		if s == sectionRule {
+			fmt.Fprintln(&b, s)
+			return
+		}
+		fmt.Fprintln(&b, runewidth.Truncate(terminalText(s, false), max(1, width), "…"))
+	}
 	line("  " + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
 	list := m.taskList()
 	rows := list.rows
