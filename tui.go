@@ -24,7 +24,13 @@ type sectionPicker struct {
 
 type taskList = sectionList[*task]
 
+type taskFieldEdit struct {
+	field, day  string
+	ids, titles []string
+}
+
 type terminal struct {
+	fieldEdit                                            *taskFieldEdit
 	timelineOffset                                       int
 	helpOffset                                           int
 	suggestion                                           int
@@ -284,6 +290,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	m.suggestion = 0
 	switch key.String() {
 	case "esc":
+		m.fieldEdit = nil
 		m.mode, m.notice = m.commandReturn, ""
 		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	case "ctrl+u":
@@ -309,6 +316,14 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	case "enter":
 		input := strings.TrimSpace(m.input)
 		if input == "" {
+			return
+		}
+		if edit := m.fieldEdit; edit != nil {
+			args := append([]string{input}, edit.ids...)
+			if m.executeDay(edit.day, "batch-"+edit.field, args...) {
+				m.fieldEdit = nil
+				m.input, m.inputCursor, m.mode = "", 0, ""
+			}
 			return
 		}
 		parts := strings.Fields(input)
@@ -556,11 +571,30 @@ func (m *terminal) normalKey(key string) bool {
 			}
 		} else if digit, err := strconv.Atoi(key); err == nil && len(key) == 1 {
 			m.count = min(max(1, len(rows)), m.count*10+digit)
-			m.notice = fmt.Sprintf("%d | dd deletes", m.count)
+			m.notice = fmt.Sprintf("%d | dd delete · c category · C code", m.count)
 			return false
 		} else if key == "d" && target != nil {
 			m.deleting = true
 			m.notice = "Press d again to delete | Esc cancels"
+			return false
+		} else if key == "C" || (key == "c" && m.count > 0) {
+			count := max(1, m.count)
+			m.count = 0
+			if target == nil {
+				m.notice = "No task selected."
+				return false
+			}
+			field := "category"
+			if key == "C" {
+				field = "code"
+			}
+			edit := &taskFieldEdit{field: field, day: m.day}
+			for _, t := range rows[m.selected:min(m.selected+count, len(rows))] {
+				edit.ids = append(edit.ids, t.ID)
+				edit.titles = append(edit.titles, t.Title)
+			}
+			m.openCommand("")
+			m.fieldEdit = edit
 			return false
 		} else if m.count != 0 {
 			m.count, m.notice = 0, ""
@@ -769,7 +803,18 @@ func (m terminal) render(width int) string {
 	case "routines":
 		m.drawRoutines(line, width)
 	case "command":
-		line("  " + commandUsage(m.input))
+		if edit := m.fieldEdit; edit != nil {
+			line(fmt.Sprintf("  Set %s on %d task(s) | - clears | Esc cancels", edit.field, len(edit.ids)))
+			shown := min(len(edit.titles), max(1, m.room()-2))
+			for _, name := range edit.titles[:shown] {
+				line("  > " + name)
+			}
+			if shown < len(edit.titles) {
+				line(fmt.Sprintf("  … and %d more", len(edit.titles)-shown))
+			}
+		} else {
+			line("  " + commandUsage(m.input))
+		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)
 		if _, matches := m.addSuggestions(); len(matches) > 0 {
@@ -911,6 +956,9 @@ func (m terminal) renderNote(width int) (string, *tea.Cursor) {
 
 // addSuggestions preserves the optional estimate while completing only the title.
 func (m terminal) addSuggestions() (string, []string) {
+	if m.fieldEdit != nil {
+		return "", nil
+	}
 	body, ok := strings.CutPrefix(m.input, "add ")
 	if !ok {
 		return "", nil

@@ -204,6 +204,21 @@ func findTask(rows []*task, ref string) (*task, error) {
 
 func (s *state) apply(day, cmd string, args []string, now time.Time, sections []section) error {
 	switch cmd {
+	case "batch-code", "batch-category":
+		if len(args) < 2 {
+			return errInvalidCommand
+		}
+		field := strings.TrimPrefix(cmd, "batch-")
+		rows := s.rows(day)
+		for _, id := range args[1:] {
+			t, err := findTask(rows, id)
+			if err != nil {
+				return err
+			}
+			if err := s.applyTaskCommand(t, rows, field, args[:1], now, sections); err != nil {
+				return err
+			}
+		}
 	case "add":
 		if len(args) == 0 {
 			return errInvalidCommand

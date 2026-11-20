@@ -63,7 +63,7 @@ var helpLines = func() []string {
 		"  v then dd   Delete the selected routine",
 		"  R           Set repeat: daily/2, mon/2, monthly:1, monthly:2:tue",
 		"              weekday = Mon–Fri, holiday = Sat–Sun",
-		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  c           Set category", "  u           Reset to Pending",
+		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  [count]c    Set category", "  [count]C    Set work code in task list", "  u           Reset to Pending",
 		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  : or i      Enter a command", "  q           Quit",
 		"", "COMMANDS   @ = selected task",
 		"  Left/Right  Move the cursor", "  Home/End    Jump to start/end of input",

@@ -285,3 +285,33 @@ func TestRoutineSectionPickerReturnsToRoutineView(t *testing.T) {
 		t.Fatal("cancel should return to routines with the assignment intact")
 	}
 }
+
+func TestCountedTaskFields(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{
+		{ID: "one", Day: day, State: "pending", SectionID: "am"},
+		{ID: "two", Day: day, State: "pending", SectionID: "pm"},
+		{ID: "three", Day: day, State: "pending", SectionID: "am"},
+	}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	m := terminal{app: application{store: repo, sections: []section{{ID: "am"}, {ID: "pm"}}}, day: day, now: now, data: s, list: true, sectionID: "am"}
+	m = sectionPress(m, '2', 'c', 'h', 'o', 'm', 'e', tea.KeyEnter)
+	m = sectionPress(m, '9', 'C', 'P', '1', tea.KeyEnter)
+	m = sectionPress(m, '2', 'C', '-', tea.KeyEsc)
+	saved, err := repo.load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range saved.Tasks {
+		if task.SectionID == "am" && (task.Category != "home" || task.WorkCode != "P1") {
+			t.Fatalf("selected task not updated: %+v", task)
+		}
+		if task.SectionID == "pm" && (task.Category != "" || task.WorkCode != "") {
+			t.Fatal("changed filtered task")
+		}
+	}
+}
