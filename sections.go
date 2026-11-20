@@ -75,7 +75,11 @@ func sectionEnded(s section, day string, now time.Time) bool {
 }
 
 func checkSectionPlacement(t *task, destination string, sections []section, now time.Time) error {
-	if destination != taskSection(t, sections, now) {
+	current := taskSection(t, sections, now)
+	if t.State == "done" && t.SectionID != "" {
+		current = t.SectionID
+	}
+	if destination != current {
 		if s, ok := sectionByID(sections, destination); ok && sectionEnded(s, t.Day, now) {
 			return fmt.Errorf("section %q has already ended", s.Name)
 		}
@@ -84,25 +88,19 @@ func checkSectionPlacement(t *task, destination string, sections []section, now 
 }
 
 func taskSection(t *task, sections []section, now time.Time) string {
-	if t.SectionID != "" {
-		if s, ok := sectionByID(sections, t.SectionID); ok {
+	if t.State == "done" || (t.State == "running" && t.SectionID == "") {
+		var first time.Time
+		for _, interval := range t.Sessions {
+			if !interval.Start.IsZero() && (first.IsZero() || interval.Start.Before(first)) {
+				first = interval.Start
+			}
+		}
+		if !first.IsZero() {
+			s, _ := sectionAt(sections, first.In(now.Location()))
 			return s.ID
 		}
-		return ""
 	}
-	if t.State != "running" && t.State != "done" {
-		return ""
-	}
-	var first time.Time
-	for _, session := range t.Sessions {
-		if !session.Start.IsZero() && (first.IsZero() || session.Start.Before(first)) {
-			first = session.Start
-		}
-	}
-	if first.IsZero() {
-		return ""
-	}
-	s, _ := sectionAt(sections, first.In(now.Location()))
+	s, _ := sectionByID(sections, t.SectionID)
 	return s.ID
 }
 

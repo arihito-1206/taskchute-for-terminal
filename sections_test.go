@@ -112,6 +112,14 @@ func TestTaskSectionUsesPlacementOrFirstActualStart(t *testing.T) {
 	if got := taskSection(&work, sections, now); got != "pm" {
 		t.Fatalf("assigned task: got %q", got)
 	}
+	work.State = "done"
+	if got := taskSection(&work, sections, now); got != "am" {
+		t.Fatalf("completed task with a different planned section: got %q", got)
+	}
+	work.Sessions = nil
+	if got := taskSection(&work, sections, now); got != "pm" {
+		t.Fatalf("completed task without a recorded start: got %q", got)
+	}
 	work.SectionID, work.State = "", "pending"
 	if got := taskSection(&work, sections, now); got != "" {
 		t.Fatalf("unassigned paused task: got %q", got)
