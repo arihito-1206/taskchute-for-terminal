@@ -39,9 +39,6 @@ func (r repository) syncData(restore bool) error {
 	if err != nil || top != dir || name != "tasks.json" {
 		return errors.New("--data must point to tasks.json at the root of the backup checkout")
 	}
-	if info, err := os.Lstat(filepath.Join(dir, name)); err == nil && !info.Mode().IsRegular() {
-		return errors.New("tasks.json must be a regular file")
-	}
 	upstream, err := git("rev-parse", "--symbolic-full-name", "@{upstream}")
 	if err != nil || !strings.HasPrefix(upstream, "refs/remotes/origin/") {
 		return errors.New("check out a branch tracking origin; initialize the private repository first")
@@ -52,7 +49,14 @@ func (r repository) syncData(restore bool) error {
 	}
 	r.path = filepath.Join(dir, name)
 	return r.withLock(func() error {
-		changes, err := git("status", "--porcelain", "--", name)
+		info, err := os.Lstat(r.path)
+		if err == nil && !info.Mode().IsRegular() {
+			return errors.New("tasks.json must be a regular file")
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		changes, err := git("status", "--porcelain", "--untracked-files=all", "--", name)
 		if err != nil {
 			return err
 		}
@@ -79,8 +83,19 @@ func (r repository) syncData(restore bool) error {
 			if _, err := decodeState([]byte(raw)); err != nil {
 				return fmt.Errorf("invalid backup: %w", err)
 			}
+			if err := checkBackupPaths(git, "HEAD.."+target, name, "incoming"); err != nil {
+				return err
+			}
 			if _, err = git("merge", "--ff-only", target); err != nil {
 				return err
+			}
+			restored, err := os.Stat(r.path)
+			if err != nil {
+				return fmt.Errorf("inspect restored data: %w", err)
+			}
+			// Preserve Git's executable bit to keep older checkouts clean.
+			if err := os.Chmod(r.path, 0600|restored.Mode().Perm()&0100); err != nil {
+				return fmt.Errorf("protect restored data: %w", err)
 			}
 			fmt.Println("Backup pulled. Open TaskChute with the same --data path.")
 			return nil
@@ -94,14 +109,8 @@ func (r repository) syncData(restore bool) error {
 		if _, err = r.load(context.Background()); err != nil {
 			return fmt.Errorf("cannot back up invalid data: %w", err)
 		}
-		files, err := git("log", "--format=", "--name-only", upstream+"..HEAD")
-		if err != nil {
+		if err := checkBackupPaths(git, upstream+"..HEAD", name, "outgoing"); err != nil {
 			return err
-		}
-		for _, file := range strings.Split(files, "\n") {
-			if file != "" && file != name {
-				return errors.New("outgoing commits contain other files; use a dedicated backup checkout")
-			}
 		}
 		if changes != "" {
 			if _, err = git("add", "--", name); err != nil {
@@ -111,10 +120,25 @@ func (r repository) syncData(restore bool) error {
 				return err
 			}
 		}
-		if _, err = git("push", "origin", "HEAD:refs/heads/"+branch); err != nil {
+		if _, err = git("push", "--no-follow-tags", "--recurse-submodules=no", "origin", "HEAD:refs/heads/"+branch); err != nil {
 			return err
 		}
 		fmt.Println("Backup pushed to origin/" + branch + ".")
 		return nil
 	})
+}
+
+func checkBackupPaths(git func(...string) (string, error), revisionRange, dataPath, direction string) error {
+	// Merge commits can introduce paths absent from both parents.
+	// Disable rename detection so both the deleted and added paths are checked.
+	files, err := git("log", "--format=", "--name-only", "--diff-merges=separate", "--no-renames", "-z", revisionRange)
+	if err != nil {
+		return err
+	}
+	for file := range strings.SplitSeq(files, "\x00") {
+		if file != "" && file != dataPath {
+			return fmt.Errorf("%s commits contain other files; use a dedicated backup checkout", direction)
+		}
+	}
+	return nil
 }
