@@ -546,35 +546,53 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 			t.Sessions = append(t.Sessions, session{Start: start})
 		}
 	case "set-end":
-		if len(args) != 1 {
+		if len(args) < 1 || len(args) > 2 {
 			return errInvalidCommand
 		}
-		if t.State != "done" || len(t.Sessions) == 0 {
-			return errors.New("select a completed task")
+		index := len(t.Sessions) - 1
+		if len(args) == 2 {
+			number, err := strconv.Atoi(args[1])
+			if err != nil || number < 1 || number > len(t.Sessions) {
+				return errors.New("execution interval not found")
+			}
+			index = number - 1
 		}
-		last := &t.Sessions[len(t.Sessions)-1]
-		if last.End == nil {
-			return errors.New("task has no end time")
+		if index < 0 {
+			return errors.New("task has no recorded execution intervals")
 		}
+		selected := &t.Sessions[index]
 		if args[0] == "-" {
+			if index != len(t.Sessions)-1 || t.State != "done" || selected.End == nil {
+				return errors.New("only the last interval of a completed task can be resumed")
+			}
 			if t.Day > now.Format(dateLayout) {
 				return errors.New("cannot resume a task scheduled for a future day")
 			}
 			if s.running() != nil {
 				return errors.New("finish or pause the running task first")
 			}
-			last.End = nil
+			selected.End = nil
 			t.State = "running"
 			return nil
 		}
-		end, err := parseTime(last.End.In(now.Location()).Format(dateLayout), args[0], now)
+		date := now
+		if selected.End != nil {
+			date = *selected.End
+		}
+		end, err := parseTime(date.In(now.Location()).Format(dateLayout), args[0], now)
 		if err != nil {
 			return err
 		}
-		if end.Before(last.Start) || end.After(now) {
-			return errors.New("end must be between start and now")
+		if end.Before(selected.Start) || end.After(now) {
+			return errors.New("end must be between this interval's start and now")
 		}
-		last.End = &end
+		if index+1 < len(t.Sessions) && end.After(t.Sessions[index+1].Start) {
+			return errors.New("end cannot be after the next interval's start")
+		}
+		if selected.End == nil && t.State == "running" && index == len(t.Sessions)-1 {
+			t.State = "done"
+		}
+		selected.End = &end
 	case "move", "move-section":
 		destination := t.SectionID
 		if cmd == "move-section" {

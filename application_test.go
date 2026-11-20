@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -400,5 +401,35 @@ func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
 	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.rows(day)) != 0 {
 		t.Fatalf("routine placement must not persist generated occurrences: %v", err)
+	}
+}
+
+func TestEditEarlierExecutionInterval(t *testing.T) {
+	now := time.Now()
+	day := now.AddDate(0, 0, -1).Format(dateLayout)
+	start, err := parseTime(day, "1130", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstEnd := start.Add(11 * time.Minute)
+	secondStart := start.Add(78 * time.Minute)
+	secondEnd := secondStart.Add(time.Minute)
+	design := &task{ID: "design", Day: day, State: "done", Sessions: []session{
+		{Start: start, End: &firstEnd}, {Start: secondStart, End: &secondEnd},
+	}}
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{design}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	m := terminal{app: application{store: repo}, data: s, now: now, day: day, pinned: true, list: true}
+	m = sectionPress(m, 'F', 'k', tea.KeyEnter, '1', '3', '0', '0', tea.KeyEnter)
+	if m.mode != "command" || !strings.Contains(m.notice, "next interval") {
+		t.Fatalf("overlap was not rejected: %s", m.notice)
+	}
+	m = sectionPress(m, tea.KeyEsc, 'F', 'k', tea.KeyEnter, '1', '1', '5', '5', tea.KeyEnter)
+	got := m.data.Tasks[0].Sessions
+	if m.mode != "" || !got[0].End.Equal(start.Add(25*time.Minute)) || !got[1].End.Equal(secondEnd) {
+		t.Fatalf("edit did not update just the first interval: %+v, %s", got, m.notice)
 	}
 }

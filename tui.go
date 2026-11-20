@@ -29,7 +29,13 @@ type taskFieldEdit struct {
 	ids, titles []string
 }
 
+type endTimeEdit struct {
+	task  *task
+	index int
+}
+
 type terminal struct {
+	endEdit                                              endTimeEdit
 	fieldEdit                                            *taskFieldEdit
 	timelineOffset                                       int
 	helpOffset                                           int
@@ -254,6 +260,8 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.routineKey(event.String())
 		} else if m.mode == "section-picker" {
 			m.sectionPickerKey(event.String())
+		} else if m.mode == "interval-picker" {
+			m.intervalPickerKey(event.String())
 		} else {
 			if m.normalKey(event.String()) {
 				return m, tea.Quit
@@ -291,6 +299,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	switch key.String() {
 	case "esc":
 		m.fieldEdit = nil
+		m.endEdit = endTimeEdit{}
 		m.mode, m.notice = m.commandReturn, ""
 		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	case "ctrl+u":
@@ -323,6 +332,13 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			if m.executeDay(edit.day, "batch-"+edit.field, args...) {
 				m.fieldEdit = nil
 				m.input, m.inputCursor, m.mode = "", 0, ""
+			}
+			return
+		}
+		if edit := m.endEdit; edit.task != nil {
+			if m.executeDay(edit.task.Day, "set-end", edit.task.ID, input, strconv.Itoa(edit.index+1)) {
+				m.endEdit = endTimeEdit{}
+				m.input, m.inputCursor, m.commandReturn, m.mode = "", 0, "", ""
 			}
 			return
 		}
@@ -400,6 +416,49 @@ func (m terminal) commandLine(width int) (string, int) {
 	used := ansi.StringWidth(before)
 	after = ansi.Truncate(after, max(0, room-used), "")
 	return "\x1b[36;1m" + prompt + "\x1b[0m" + before + after, min(width-1, len(prompt)+used)
+}
+
+func (m *terminal) intervalPickerKey(key string) {
+	switch key {
+	case "j", "down":
+		m.endEdit.index = min(m.endEdit.index+1, len(m.endEdit.task.Sessions)-1)
+	case "k", "up":
+		m.endEdit.index = max(0, m.endEdit.index-1)
+	case "enter":
+		m.mode = ""
+		m.openCommand("")
+	case "esc":
+		m.mode, m.endEdit = "", endTimeEdit{}
+	}
+}
+
+func (m terminal) intervalLabel(t *task, index int) string {
+	interval := t.Sessions[index]
+	location := m.now.Location()
+	end := "Running"
+	if interval.End != nil {
+		end = timeLabel(*interval.End, t.Day, location)
+	}
+	return timeLabel(interval.Start, t.Day, location) + " – " + end
+}
+
+func (m terminal) intervalPickerView(width int) string {
+	edit := m.endEdit
+	lines := []string{"EDIT END TIME | " + edit.task.Title}
+	visible := max(1, m.helpRows()-2)
+	first := max(0, edit.index-visible+1)
+	for i := first; i < min(len(edit.task.Sessions), first+visible); i++ {
+		marker := "  "
+		if i == edit.index {
+			marker = "> "
+		}
+		lines = append(lines, marker+m.intervalLabel(edit.task, i))
+	}
+	lines = append(lines, "j/k select | Enter edit | Esc cancel")
+	for i, line := range lines {
+		lines[i] = runewidth.Truncate(terminalText(line, false), width, "…")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m *terminal) openSectionPicker(command, id, day, current string) {
@@ -702,8 +761,20 @@ func (m *terminal) normalKey(key string) bool {
 		} else {
 			m.notice = "Start a task or select one in the list."
 		}
-	case ":", "i", "a", "r", "e", "S", "F", "R", "c":
-		prefix := map[string]string{"a": "add ", "r": "rename @ ", "e": "estimate @ ", "S": "set-start @ ", "F": "set-end @ ", "R": "routine @ ", "c": "category @ "}[key]
+	case "F":
+		if target == nil || len(target.Sessions) == 0 {
+			m.notice = "Select a task with recorded execution intervals."
+			break
+		}
+		m.endEdit = endTimeEdit{task: target, index: len(target.Sessions) - 1}
+		m.notice = ""
+		if len(target.Sessions) > 1 {
+			m.mode = "interval-picker"
+		} else {
+			m.openCommand("")
+		}
+	case ":", "i", "a", "r", "e", "S", "R", "c":
+		prefix := map[string]string{"a": "add ", "r": "rename @ ", "e": "estimate @ ", "S": "set-start @ ", "R": "routine @ ", "c": "category @ "}[key]
 		if strings.Contains(prefix, "@") && target == nil {
 			m.notice = "No task selected."
 			break
@@ -770,6 +841,9 @@ func (m terminal) render(width int) string {
 	if m.mode == "section-picker" {
 		return m.sectionPickerView(width)
 	}
+	if m.mode == "interval-picker" {
+		return m.intervalPickerView(width)
+	}
 	if m.splash && width >= 42 && m.height >= 15 {
 		return startupMark
 	}
@@ -811,7 +885,9 @@ func (m terminal) render(width int) string {
 	case "routines":
 		m.drawRoutines(line, width)
 	case "command":
-		if edit := m.fieldEdit; edit != nil {
+		if edit := m.endEdit; edit.task != nil {
+			line("  End time (HHMM) | " + m.intervalLabel(edit.task, edit.index))
+		} else if edit := m.fieldEdit; edit != nil {
 			line(fmt.Sprintf("  Set %s on %d task(s) | - clears | Esc cancels", edit.field, len(edit.ids)))
 			shown := min(len(edit.titles), max(1, m.room()-2))
 			for _, name := range edit.titles[:shown] {
@@ -970,7 +1046,7 @@ func (m terminal) renderNote(width int) (string, *tea.Cursor) {
 
 // addSuggestions preserves the optional estimate while completing only the title.
 func (m terminal) addSuggestions() (string, []string) {
-	if m.fieldEdit != nil {
+	if m.fieldEdit != nil || m.endEdit.task != nil {
 		return "", nil
 	}
 	body, ok := strings.CutPrefix(m.input, "add ")
