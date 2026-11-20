@@ -53,7 +53,7 @@ type terminal struct {
 	mode, input, notice, noteID, noteDay                 string
 	commandReturn                                        string
 	filter                                               string
-	routineDeleteID                                      string
+	routineDeleteID, resetID                             string
 	note                                                 noteEditor
 }
 
@@ -103,7 +103,8 @@ func (m *terminal) showDay(day string, pinned bool) {
 		m.notice = err.Error()
 		return
 	}
-	m.data, m.day, m.pinned = s, day, pinned
+	// Landing on today follows midnight again, exactly like Alt+t.
+	m.data, m.day, m.pinned = s, day, pinned && day != m.now.Format(dateLayout)
 	m.selected, m.offset, m.count = 0, 0, 0
 	m.deleting = false
 	m.list = true
@@ -667,6 +668,11 @@ func (m *terminal) normalKey(key string) bool {
 		}
 		return false
 	}
+	confirmReset := m.resetID
+	m.resetID = ""
+	if confirmReset != "" && key != "u" {
+		m.notice = ""
+	}
 	followSelection := true
 	defer func() {
 		if followSelection {
@@ -814,6 +820,12 @@ func (m *terminal) normalKey(key string) bool {
 		}
 	case "u":
 		if m.list && target != nil {
+			// Clearing a recorded log cannot be undone, so ask once.
+			if len(target.Sessions) > 0 && confirmReset != target.ID {
+				m.resetID = target.ID
+				m.notice = "Press u again to clear the recorded time | any other key cancels"
+				break
+			}
 			m.execute("reset", target.ID)
 		}
 	case "b":
@@ -1222,8 +1234,10 @@ func (m terminal) workCodeSuggestions(prefix, input string) []inputSuggestion {
 		if t.Deleted || t.Day > m.day || t.WorkCode == "" || strings.ContainsFunc(t.WorkCode, unicode.IsControl) {
 			continue
 		}
-		code := strings.ToLower(t.WorkCode)
-		if !seen[code] && strings.Contains(code, query) {
+		if !containsFold(t.WorkCode, query) {
+			continue
+		}
+		if code := strings.ToLower(t.WorkCode); !seen[code] {
 			seen[code] = true
 			matches = append(matches, inputSuggestion{label: t.WorkCode, input: prefix + t.WorkCode})
 		}
@@ -1255,11 +1269,11 @@ func (m terminal) addSuggestions() []inputSuggestion {
 	seen := map[string]bool{}
 	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
 		t := m.data.Tasks[i]
-		if t.Deleted || t.Day > m.day {
+		if t.Deleted || t.Day > m.day || !hasPrefixFold(t.Title, query) {
 			continue
 		}
 		name := strings.ToLower(t.Title)
-		if !seen[name] && strings.HasPrefix(name, query) {
+		if !seen[name] {
 			seen[name] = true
 			candidate := inputSuggestion{label: t.Title, input: prefix + t.Title}
 			if t.Minutes != nil {
@@ -1267,9 +1281,47 @@ func (m terminal) addSuggestions() []inputSuggestion {
 				if !explicitEstimate {
 					candidate.input = fmt.Sprintf("add %g %s", *t.Minutes, t.Title)
 				}
+			} else if first, _, _ := strings.Cut(t.Title, " "); !explicitEstimate && looksLikeEstimate(first) {
+				// "add 10 push-ups" would read 10 as minutes; "-" keeps it a title.
+				candidate.input = "add - " + t.Title
 			}
 			matches = append(matches, candidate)
 		}
 	}
 	return matches
+}
+
+// looksLikeEstimate reports whether add would read the word as minutes.
+func looksLikeEstimate(word string) bool {
+	if word == "-" {
+		return true
+	}
+	_, err := strconv.ParseFloat(word, 64)
+	return err == nil
+}
+
+// hasPrefixFold compares without allocating; prefix must already be lower case.
+func hasPrefixFold(s, prefix string) bool {
+	for _, want := range prefix {
+		r, size := utf8.DecodeRuneInString(s)
+		if size == 0 || unicode.ToLower(r) != want {
+			return false
+		}
+		s = s[size:]
+	}
+	return true
+}
+
+// containsFold is the allocation-free form of Contains(ToLower(s), sub).
+func containsFold(s, sub string) bool {
+	for {
+		if hasPrefixFold(s, sub) {
+			return true
+		}
+		if s == "" {
+			return false
+		}
+		_, size := utf8.DecodeRuneInString(s)
+		s = s[size:]
+	}
 }
