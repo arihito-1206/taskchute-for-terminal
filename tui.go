@@ -927,7 +927,7 @@ func (m terminal) render(width int) string {
 				if task.WorkCode != "" {
 					codeLabel = "🔖"
 				}
-				text := row(task, m.day, m.now, titleWidth, codeLabel)
+				text := row(task, m.day, m.now, titleWidth, title(task), codeLabel)
 				prefix := "  "
 				if i == m.selected {
 					prefix = "> "
@@ -948,8 +948,21 @@ func (m terminal) render(width int) string {
 				default:
 					line(prefix + text)
 				}
-				if i == m.selected && task.WorkCode != "" {
-					line("           └ Code " + task.WorkCode)
+				if i == m.selected {
+					var details []string
+					if task.RoutineID != "" {
+						if routine, ok := m.data.Routines[task.RoutineID]; ok {
+							details = append(details, "Routine · "+routine.repeatLabel())
+						} else {
+							details = append(details, "Former routine")
+						}
+					}
+					if task.WorkCode != "" {
+						details = append(details, "Code "+task.WorkCode)
+					}
+					if len(details) > 0 {
+						line("           └ " + strings.Join(details, " │ "))
+					}
 				}
 			}, sectionCapacity)
 			line("  j/k select | J/K move | b section | [count]dd delete | U undo")

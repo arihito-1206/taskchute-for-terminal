@@ -53,7 +53,7 @@ func timeLabel(t time.Time, day string, location *time.Location) string {
 	return t.Format("15:04")
 }
 
-func row(t *task, day string, now time.Time, width int, codeLabel string) string {
+func row(t *task, day string, now time.Time, width int, name, codeLabel string) string {
 	label := map[string]string{"pending": "Pending", "running": "Running", "done": "Done"}[t.State]
 	start, end := "-", "-"
 	if len(t.Sessions) > 0 {
@@ -65,10 +65,6 @@ func row(t *task, day string, now time.Time, width int, codeLabel string) string
 		if t.legacyPaused() {
 			label = "Paused"
 		}
-	}
-	name := title(t)
-	if t.RoutineID != "" {
-		name = "[R] " + name
 	}
 	if codeLabel == "" {
 		name = runewidth.Truncate(name, width, "...")

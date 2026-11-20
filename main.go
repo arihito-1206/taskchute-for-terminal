@@ -88,7 +88,11 @@ func run() error {
 			if t.WorkCode != "" {
 				codeLabel = "[" + terminalText(t.WorkCode, false) + "]"
 			}
-			fmt.Printf("%.8s  %s\n", terminalText(t.ID, false), row(t, *day, now, 28, codeLabel))
+			name := title(t)
+			if t.RoutineID != "" {
+				name = "[R] " + name
+			}
+			fmt.Printf("%.8s  %s\n", terminalText(t.ID, false), row(t, *day, now, 28, name, codeLabel))
 		}
 	}
 	return nil
