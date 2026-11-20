@@ -197,6 +197,43 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 	}
 }
 
+func TestRoutineWorkCodeIsInheritedByNewTasks(t *testing.T) {
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	app := application{store: repo}
+	now := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
+	const first, second, third, fourth = "2026-11-20", "2026-11-21", "2026-11-22", "2026-11-23"
+	execute := func(day, cmd string, args ...string) *state {
+		t.Helper()
+		s, err := app.execute(day, cmd, args, now)
+		if err != nil {
+			t.Fatalf("%s: %v", cmd, err)
+		}
+		return s
+	}
+	id := execute(first, "add", "Read").Tasks[0].ID
+	execute(first, "code", id, "PJ-042")
+	routineID := execute(first, "routine", id, "daily").Order[0]
+	next := execute(second, "ls").rows(second)[0]
+	if next.WorkCode != "PJ-042" {
+		t.Fatalf("generated task has work code %q", next.WorkCode)
+	}
+	execute(second, "rename", next.ID, "Read tomorrow")
+	if _, err := app.execute(first, "routine-code", []string{routineID, "invalid code"}, now); err == nil {
+		t.Fatal("accepted whitespace in a routine work code")
+	}
+	execute(first, "routine-code", routineID, "PJ-043")
+	if got := execute(third, "ls").rows(third)[0].WorkCode; got != "PJ-043" {
+		t.Fatalf("generated task did not inherit updated work code: %q", got)
+	}
+	if got := execute(second, "ls").rows(second)[0].WorkCode; got != "PJ-042" {
+		t.Fatalf("updating routine code changed a saved task: %q", got)
+	}
+	execute(first, "routine-code", routineID, "-")
+	if got := execute(fourth, "ls").rows(fourth)[0].WorkCode; got != "" {
+		t.Fatalf("generated task did not inherit cleared work code: %q", got)
+	}
+}
+
 func TestMoveSectionUpdatesPlacementAndOrderTogether(t *testing.T) {
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
 	app := application{store: repo, sections: []section{

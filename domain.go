@@ -54,6 +54,7 @@ type task struct {
 type routine struct {
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
+	WorkCode  string   `json:"work_code,omitempty"`
 	Category  string   `json:"category,omitempty"`
 	SectionID string   `json:"section_id,omitempty"`
 	FirstDay  string   `json:"first_day"`
@@ -74,6 +75,18 @@ type state struct {
 	Deletions []deletion         `json:"deletions,omitempty"`
 }
 
+func parseWorkCode(cmd string, args []string) (string, error) {
+	if len(args) != 1 || args[0] == "" || strings.ContainsFunc(args[0], func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}) {
+		return "", fmt.Errorf("use %s ID CODE or %s ID -", cmd, cmd)
+	}
+	if args[0] == "-" {
+		return "", nil
+	}
+	return args[0], nil
+}
+
 func identifier() string {
 	var bytes [16]byte
 	rand.Read(bytes[:])
@@ -90,7 +103,7 @@ func (s *state) fill(day string) {
 		}
 		found := slices.ContainsFunc(s.Tasks, func(t *task) bool { return t.Day == day && t.RoutineID == id })
 		if !found {
-			s.Tasks = append(s.Tasks, &task{ID: occurrenceID(id, day), Day: day, RoutineID: id, Title: r.Title, Category: r.Category, SectionID: r.SectionID, Minutes: r.Minutes, State: "pending", Sessions: []session{}})
+			s.Tasks = append(s.Tasks, &task{ID: occurrenceID(id, day), Day: day, RoutineID: id, Title: r.Title, WorkCode: r.WorkCode, Category: r.Category, SectionID: r.SectionID, Minutes: r.Minutes, State: "pending", Sessions: []session{}})
 		}
 	}
 }
@@ -306,6 +319,20 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if j >= 0 && j < len(s.Order) {
 			s.Order[i], s.Order[j] = s.Order[j], s.Order[i]
 		}
+	case "routine-code":
+		if len(args) != 2 {
+			return invalid
+		}
+		r, ok := s.Routines[args[0]]
+		if !ok {
+			return errors.New("routine not found")
+		}
+		code, err := parseWorkCode(cmd, args[1:])
+		if err != nil {
+			return err
+		}
+		r.WorkCode = code
+		s.Routines[args[0]] = r
 	case "routine-section", "routine-place":
 		if len(args) != 2 && (cmd != "routine-place" || len(args) != 4) {
 			return invalid
@@ -397,15 +424,11 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 				t.Notes = append(t.Notes, note{Text: value, At: now})
 			}
 		case "code":
-			if len(args) != 1 || args[0] == "" || strings.ContainsFunc(args[0], func(r rune) bool {
-				return unicode.IsSpace(r) || unicode.IsControl(r)
-			}) {
-				return errors.New("use code ID CODE or code ID -")
+			code, err := parseWorkCode(cmd, args)
+			if err != nil {
+				return err
 			}
-			t.WorkCode = args[0]
-			if t.WorkCode == "-" {
-				t.WorkCode = ""
-			}
+			t.WorkCode = code
 		case "estimate":
 			if len(args) != 1 {
 				return invalid
@@ -543,7 +566,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			}
 			r, exists := s.Routines[t.RoutineID]
 			if !exists {
-				r = routine{ID: identifier(), Title: t.Title, Category: t.Category, SectionID: t.SectionID, FirstDay: day, Minutes: t.Minutes}
+				r = routine{ID: identifier(), Title: t.Title, WorkCode: t.WorkCode, Category: t.Category, SectionID: t.SectionID, FirstDay: day, Minutes: t.Minutes}
 			}
 			r.Days = days
 			if len(args) == 2 {

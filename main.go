@@ -13,7 +13,7 @@ import (
 
 const commands = `add [MIN] TITLE | start [ID] | done | pause | ls | status
 rename ID TITLE | estimate ID MIN|- | category ID NAME|- | note ID TEXT
-code ID CODE|-
+code ID CODE|- | routine-code ID CODE|-
 set-start ID HHMM | set-end ID HHMM|- | reset ID | move ID before|after ID
 routine ID daily|mon,wed,fri [MIN] | routine-move ID up|down
 section ID SECTION|- | routine-section ID SECTION|-

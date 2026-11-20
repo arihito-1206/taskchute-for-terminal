@@ -84,3 +84,28 @@ func TestRoutineViewportPagesThroughEmptyGroups(t *testing.T) {
 		t.Fatalf("could not page to empty Unassigned heading:\n%s", view)
 	}
 }
+
+func TestRoutineWorkCodeEditingReturnsToRoutineList(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{}, Order: []string{"r1"}, Routines: map[string]routine{
+		"r1": {ID: "r1", Title: "Read", WorkCode: "PJ-04", FirstDay: day},
+	}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	m := terminal{app: application{store: repo}, data: s, day: day, now: now}
+	m = sectionPress(m, 'v', 'c')
+	if m.input != "routine-code r1 PJ-04" {
+		t.Fatalf("did not prefill the current code: %q", m.input)
+	}
+	m = sectionPress(m, '2', tea.KeyEnter)
+	if m.mode != "routines" || m.data.Routines["r1"].WorkCode != "PJ-042" {
+		t.Fatalf("edit did not save and return to routines: %q", m.mode)
+	}
+	m = sectionPress(m, 'c', tea.KeyEsc)
+	if m.mode != "routines" || m.data.Routines["r1"].WorkCode != "PJ-042" {
+		t.Fatal("cancel did not return to routines")
+	}
+}

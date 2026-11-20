@@ -139,6 +139,11 @@ func (m *terminal) routineKey(key string) {
 			m.openSectionPicker("routine-section", id, m.day, m.data.Routines[id].SectionID)
 		}
 		return
+	case "c":
+		if id := m.routineTarget(list); id != "" {
+			m.openCommand("routine-code " + id + " " + m.data.Routines[id].WorkCode)
+		}
+		return
 	case "J", "K":
 		m.moveRoutine(list, key)
 		return
@@ -189,7 +194,7 @@ func (m *terminal) moveRoutine(list routineList, key string) {
 }
 
 func (m terminal) drawRoutines(line func(string), width int) {
-	line("  ROUTINES | j/k select | J/K move | b section | Esc back")
+	line("  ROUTINES | j/k select | J/K move | b section | c code | Esc back")
 	list := m.routineList()
 	repeatWidth := min(27, max(7, width/4))
 	nameWidth := max(8, width-repeatWidth-14)

@@ -66,6 +66,7 @@ type terminal struct {
 	pinned, splash, list, deleting                       bool
 	selected, offset, routineIndex, width, height, count int
 	mode, input, notice, noteID, noteDay                 string
+	commandReturn                                        string
 	note                                                 noteEditor
 }
 
@@ -353,8 +354,8 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	m.suggestion = 0
 	switch key.String() {
 	case "esc":
-		m.mode, m.input, m.notice = "", "", ""
-		m.inputCursor = 0
+		m.mode, m.notice = m.commandReturn, ""
+		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	case "ctrl+u":
 		m.input, m.inputCursor = "", 0
 	case "left", "ctrl+b":
@@ -395,7 +396,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			args = []string{"@", args[0]}
 		}
 		for i, arg := range args {
-			if cmd != "add" && (cmd != "code" || i == 0) && arg == "@" {
+			if cmd != "add" && cmd != "routine-code" && (cmd != "code" || i == 0) && arg == "@" {
 				target := m.target()
 				if target == nil {
 					m.notice = "No task selected."
@@ -425,14 +426,19 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			if !m.execute(cmd, args...) {
 				return
 			}
-			m.mode = ""
+			m.mode = m.commandReturn
 		}
-		m.input, m.inputCursor = "", 0
+		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	default:
 		if key.Text != "" {
 			m.insertCommandText(key.Text)
 		}
 	}
+}
+
+func (m *terminal) openCommand(input string) {
+	m.commandReturn, m.mode, m.input, m.notice = m.mode, "command", input, ""
+	m.inputCursor, m.suggestion = len(input), 0
 }
 
 func (m *terminal) insertCommandText(value string) {
@@ -731,9 +737,7 @@ func (m *terminal) normalKey(key string) bool {
 			m.notice = "No task selected."
 			break
 		}
-		m.mode, m.input, m.notice = "command", prefix, ""
-		m.inputCursor = len(prefix)
-		m.suggestion = 0
+		m.openCommand(prefix)
 		if key == "c" {
 			m.notice = "💼 work / 仕事   🏠 home / 家事   🎨 hobby / 趣味   ☕ rest / 休憩 | - clears"
 		}
