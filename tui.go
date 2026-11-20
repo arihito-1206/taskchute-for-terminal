@@ -94,14 +94,16 @@ func (m *terminal) executeDay(day, cmd string, args ...string) bool {
 
 func (m *terminal) changeDay(delta int) {
 	d, _ := time.Parse(dateLayout, m.day)
-	next := d.AddDate(0, 0, delta).Format(dateLayout)
-	s, err := m.app.execute(context.Background(), next, "status", nil, m.now)
+	m.showDay(d.AddDate(0, 0, delta).Format(dateLayout), true)
+}
+
+func (m *terminal) showDay(day string, pinned bool) {
+	s, err := m.app.execute(context.Background(), day, "status", nil, m.now)
 	if err != nil {
 		m.notice = err.Error()
 		return
 	}
-	m.data, m.day = s, next
-	m.pinned = true
+	m.data, m.day, m.pinned = s, day, pinned
 	m.selected, m.offset, m.count = 0, 0, 0
 	m.deleting = false
 	m.list = true
@@ -764,6 +766,8 @@ func (m *terminal) normalKey(key string) bool {
 		m.changeDay(-1)
 	case "alt+l", "¬":
 		m.changeDay(1)
+	case "alt+t", "†":
+		m.showDay(m.now.Format(dateLayout), false)
 	case "j", "down":
 		m.list = true
 		m.selected++
@@ -928,7 +932,7 @@ func (m terminal) render(width int) string {
 	}
 	var b strings.Builder
 	line := func(s string) { fmt.Fprintln(&b, runewidth.Truncate(terminalText(s, false), max(1, width), "…")) }
-	line("  " + m.day + " | Alt+h/l: day")
+	line("  " + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
 	list := m.taskList()
 	rows := list.rows
 	summaryLines := strings.Split(summaryWithNext(m.data, m.day, m.now, firstPending(rows)), "\n")

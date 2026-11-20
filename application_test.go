@@ -472,3 +472,18 @@ func TestStartingLegacyPausedTaskKeepsSeparateHistory(t *testing.T) {
 		t.Fatalf("expected a separate running task, got %+v", restarted)
 	}
 }
+
+func TestReturnToTodayResumesFollowingDate(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.Local)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	m := terminal{app: application{store: repo}, data: &state{}, now: now, day: "2026-11-19", pinned: true}
+	next, _ := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModAlt})
+	m = next.(terminal)
+	if m.pinned || !strings.Contains(m.render(100), "2026-11-20 (Fri)") {
+		t.Fatal("Alt+t did not return to today with the weekday displayed")
+	}
+	next, _ = m.Update(clockMsg(now.AddDate(0, 0, 1)))
+	if got := next.(terminal).day; got != "2026-11-21" {
+		t.Fatalf("did not follow the date after returning to today: %s", got)
+	}
+}

@@ -45,6 +45,14 @@ func title(t *task) string {
 	return terminalText(t.Title, false)
 }
 
+func dateWithWeekday(day string) string {
+	date, err := time.Parse(dateLayout, day)
+	if err != nil {
+		return day
+	}
+	return date.Format(dateLayout + " (Mon)")
+}
+
 func timeLabel(t time.Time, day string, location *time.Location) string {
 	t = t.In(location)
 	if t.Format(dateLayout) != day {

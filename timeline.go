@@ -161,8 +161,8 @@ func (m terminal) timelineView(width int) string {
 	lines := m.timelineLines(width)
 	rows := max(1, m.helpRows()-1)
 	first := min(m.timelineOffset, max(0, len(lines)-rows))
-	header := ansi.Truncate("TIMELINE  "+m.day, width, "")
-	footer := ansi.Truncate("j/k line  Ctrl+d/u half page  Alt+h/l day  Esc close", width, "")
+	header := ansi.Truncate("TIMELINE  "+dateWithWeekday(m.day), width, "")
+	footer := ansi.Truncate("j/k line  Ctrl+d/u half page  Alt+h/l day  Alt+t today  Esc close", width, "")
 	body := strings.Join(lines[first:min(len(lines), first+rows)], "\n")
 	return header + "\n\n" + body + "\n" + footer
 }
@@ -186,6 +186,9 @@ func (m *terminal) timelineKey(key string) {
 		m.timelineOffset = max(0, m.timelineOffset-1)
 	case "ctrl+u", "pgup":
 		m.timelineOffset = max(0, m.timelineOffset-max(1, (m.helpRows()-1)/2))
+	case "alt+t", "†":
+		m.showDay(m.now.Format(dateLayout), false)
+		m.timelineOffset = 0
 	case "alt+h", "˙", "alt+l", "¬":
 		step := 1
 		if key == "alt+h" || key == "˙" {

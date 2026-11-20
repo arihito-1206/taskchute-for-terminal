@@ -63,7 +63,7 @@ var helpLines = func() []string {
 		"  R           Create from a completed log or edit a repeat rule",
 		"              weekly:1:tue, daily/2, monthly:2:tue",
 		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time (F picks an interval)", "  [count]c    Set category", "  [count]C    Set work code in task list", "  u           Reset to Pending",
-		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  : or i      Enter a command", "  q           Quit",
+		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  Alt+t       Return to today", "  : or i      Enter a command", "  q           Quit",
 		"", "COMMANDS   @ = selected task",
 		"  Left/Right  Move the cursor", "  Home/End    Jump to start/end of input",
 	}
