@@ -215,6 +215,41 @@ func TestMoveSectionUpdatesPlacementAndOrderTogether(t *testing.T) {
 	check(move("evening"), 2, "evening", "afternoon-task", "older-setting", "movable")
 }
 
+func TestTaskMovesRejectEndedSections(t *testing.T) {
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	app := application{store: repo, sections: []section{
+		{ID: "am", Name: "Morning", Start: "00:00", End: "12:00"},
+		{ID: "pm", Name: "Afternoon", Start: "12:00", End: "24:00"},
+	}}
+	noon := time.Date(2026, 11, 20, 12, 0, 0, 0, time.Local)
+	day := noon.Format(dateLayout)
+	tomorrow := noon.AddDate(0, 0, 1).Format(dateLayout)
+	if err := repo.save(&state{Schema: 1, Tasks: []*task{
+		{ID: "today", Day: day, State: "pending", SectionID: "pm"},
+		{ID: "tomorrow", Day: tomorrow, State: "pending", SectionID: "pm"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"section", "move-section"} {
+		if _, err := app.execute(day, cmd, []string{"today", "am"}, noon); err == nil {
+			t.Fatalf("%s accepted a section at its end time", cmd)
+		}
+	}
+	s, err := repo.load()
+	if err != nil || s.rows(day)[0].SectionID != "pm" {
+		t.Fatalf("blocked placement changed saved state: %v", err)
+	}
+	if _, err := app.execute(day, "move-section", []string{"today", "am"}, noon.Add(-time.Second)); err != nil {
+		t.Fatalf("section before its end should accept movement: %v", err)
+	}
+	if _, err := app.execute(day, "move-section", []string{"today", "pm"}, noon); err != nil {
+		t.Fatalf("should be able to move out of an ended section: %v", err)
+	}
+	if _, err := app.execute(tomorrow, "section", []string{"tomorrow", "am"}, noon); err != nil {
+		t.Fatalf("tomorrow's section should accept placement: %v", err)
+	}
+}
+
 func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
 	app := application{store: repo, sections: []section{{ID: "morning"}, {ID: "afternoon"}, {ID: "evening"}}}

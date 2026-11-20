@@ -69,6 +69,20 @@ func sectionAt(sections []section, now time.Time) (section, bool) {
 	return section{}, false
 }
 
+func sectionEnded(s section, day string, now time.Time) bool {
+	today := now.Format(dateLayout)
+	return day < today || (day == today && now.Format("15:04") >= s.End)
+}
+
+func checkSectionPlacement(t *task, destination string, sections []section, now time.Time) error {
+	if destination != taskSection(t, sections, now) {
+		if s, ok := sectionByID(sections, destination); ok && sectionEnded(s, t.Day, now) {
+			return fmt.Errorf("section %q has already ended", s.Name)
+		}
+	}
+	return nil
+}
+
 func taskSection(t *task, sections []section, now time.Time) string {
 	if t.SectionID != "" {
 		if s, ok := sectionByID(sections, t.SectionID); ok {

@@ -420,6 +420,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			if destination == "-" {
 				destination = ""
 			}
+			if err := checkSectionPlacement(t, destination, sections, now); err != nil {
+				return err
+			}
 			t.SectionID = destination
 		case "reset":
 			if len(args) != 0 {
@@ -493,6 +496,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 				destination = args[0]
 				if destination == "-" {
 					destination = ""
+				}
+				if err := checkSectionPlacement(t, destination, sections, now); err != nil {
+					return err
 				}
 				args = args[1:]
 				if len(args) == 0 {

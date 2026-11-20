@@ -156,6 +156,35 @@ func TestGroupedListMovesThroughAdjacentSections(t *testing.T) {
 	assertOrder("c", "d", "e")
 }
 
+func TestTaskKeysBlockMovingIntoEndedSection(t *testing.T) {
+	now := time.Now()
+	day := now.AddDate(0, 0, -1).Format(dateLayout)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{
+		{ID: "task", Day: day, State: "pending", SectionID: "pm"},
+	}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	app := application{store: repo, sections: []section{
+		{ID: "am", Name: "Morning", Start: "00:00", End: "12:00"},
+		{ID: "pm", Name: "Afternoon", Start: "12:00", End: "24:00"},
+	}}
+	m := terminal{app: app, data: s, now: now, day: day, list: true}
+	m = sectionPress(m, 'K')
+	if !strings.Contains(m.notice, "already ended") || m.target().SectionID != "pm" {
+		t.Fatalf("K changed placement or skipped the notice: %q", m.notice)
+	}
+	m = sectionPress(m, 'b', 'k')
+	if !strings.Contains(m.render(80), "Morning  00:00–12:00 (ended)") {
+		t.Fatal("picker omitted the ended label")
+	}
+	m = sectionPress(m, tea.KeyEnter)
+	if m.mode != "section-picker" || !strings.Contains(m.notice, "already ended") || m.target().SectionID != "pm" {
+		t.Fatalf("picker accepted the ended section: %q", m.notice)
+	}
+}
+
 func TestGroupedSelectionFollowsUnassignedTaskOnStartAndFinish(t *testing.T) {
 	now := time.Now()
 	day := now.Format(dateLayout)

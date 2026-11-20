@@ -471,6 +471,9 @@ func (m terminal) sectionPickerView(width int) string {
 		if i > 0 {
 			s := m.app.sections[i-1]
 			label = s.Name + "  " + s.Start + "–" + s.End
+			if m.picker.command == "section" && sectionEnded(s, m.picker.day, m.now) {
+				label += " (ended)"
+			}
 		}
 		marker := "  "
 		if i == m.picker.index {
