@@ -238,6 +238,31 @@ func TestGroupedListPagesThroughEmptySections(t *testing.T) {
 	}
 }
 
+func TestTaskListOnlyShowsSelectedWorkCode(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	m := terminal{day: day, now: now, list: true, height: 14, data: &state{Tasks: []*task{
+		{ID: "active", Day: day, Title: "Active", WorkCode: "PJ-ACTIVE", State: "running", Sessions: []session{{Start: now}}},
+		{ID: "next", Day: day, Title: "Next task", WorkCode: "PJ-NEXT", State: "pending"},
+		{ID: "plain", Day: day, Title: "Plain task", State: "pending"},
+	}}}
+	view := m.render(80)
+	if strings.Count(view, "🔖") != 2 || !strings.Contains(view, "┗ Code PJ-ACTIVE") ||
+		strings.Contains(view, "[PJ-ACTIVE]") || strings.Contains(view, "PJ-NEXT") {
+		t.Fatalf("unexpected work code display:\n%s", view)
+	}
+	m = sectionPress(m, 'j')
+	view = m.render(80)
+	if !strings.Contains(view, "┗ Code PJ-NEXT") || strings.Contains(view, "PJ-ACTIVE") {
+		t.Fatalf("work code details did not follow selection:\n%s", view)
+	}
+	m = sectionPress(m, 'j')
+	view = m.render(80)
+	if strings.Contains(view, "┗ Code") || strings.Contains(view, "PJ-") {
+		t.Fatalf("plain task has work code details:\n%s", view)
+	}
+}
+
 func TestRoutineSectionPickerReturnsToRoutineView(t *testing.T) {
 	day := "2026-11-20"
 	now := time.Date(2026, time.November, 20, 11, 0, 0, 0, time.Local)

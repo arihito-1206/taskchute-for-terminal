@@ -81,7 +81,11 @@ func run() error {
 	if cmd == "ls" {
 		fmt.Println("ID        STATE    TASK                           EST     START        END          ELAPSED")
 		for _, t := range s.rows(*day) {
-			fmt.Printf("%.8s  %s\n", terminalText(t.ID, false), row(t, *day, now, 28))
+			codeLabel := ""
+			if t.WorkCode != "" {
+				codeLabel = "[" + terminalText(t.WorkCode, false) + "]"
+			}
+			fmt.Printf("%.8s  %s\n", terminalText(t.ID, false), row(t, *day, now, 28, codeLabel))
 		}
 	}
 	return nil

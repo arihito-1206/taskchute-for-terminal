@@ -822,7 +822,7 @@ func (m terminal) render(width int) string {
 	}
 	if t := running; t != nil && len(t.Sessions) > 0 {
 		details := "  Started " + timeLabel(t.Sessions[0].Start, m.day, m.now.Location()) + " | Est. " + estimateLabel(t.Minutes)
-		if t.WorkCode != "" {
+		if t.WorkCode != "" && !(m.list && m.mode == "") {
 			details += " | Code " + terminalText(t.WorkCode, false)
 		}
 		line(details)
@@ -864,7 +864,12 @@ func (m terminal) render(width int) string {
 			end := m.offset + m.room()
 			drawRows := func(start, stop, headers int) {
 				for i := max(start, m.offset-headers); i < min(stop, end-headers); i++ {
-					text := row(rows[i], m.day, m.now, titleWidth)
+					task := rows[i]
+					codeLabel := ""
+					if task.WorkCode != "" {
+						codeLabel = "🔖"
+					}
+					text := row(task, m.day, m.now, titleWidth, codeLabel)
 					prefix := "  "
 					if i == m.selected {
 						prefix = "> "
@@ -878,6 +883,9 @@ func (m terminal) render(width int) string {
 						fmt.Fprintln(&b, "\x1b[1;36m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
 					default:
 						line(prefix + text)
+					}
+					if i == m.selected && task.WorkCode != "" {
+						line("           ┗ Code " + task.WorkCode)
 					}
 				}
 			}

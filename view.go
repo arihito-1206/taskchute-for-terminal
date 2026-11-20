@@ -53,7 +53,7 @@ func timeLabel(t time.Time, day string, location *time.Location) string {
 	return t.Format("15:04")
 }
 
-func row(t *task, day string, now time.Time, width int) string {
+func row(t *task, day string, now time.Time, width int, codeLabel string) string {
 	label := map[string]string{"pending": "Pending", "running": "Running", "done": "Done"}[t.State]
 	start, end := "-", "-"
 	if len(t.Sessions) > 0 {
@@ -70,15 +70,15 @@ func row(t *task, day string, now time.Time, width int) string {
 	if t.RoutineID != "" {
 		name = "[R] " + name
 	}
-	if t.WorkCode == "" {
+	if codeLabel == "" {
 		name = runewidth.Truncate(name, width, "...")
 	} else {
-		code := "[" + terminalText(t.WorkCode, false) + "]"
-		if runewidth.StringWidth(code) >= width {
-			name = runewidth.Truncate(code, width, "...")
+		codeWidth := runewidth.StringWidth(codeLabel)
+		if codeWidth >= width {
+			name = runewidth.Truncate(codeLabel, width, "...")
 		} else {
-			available := width - runewidth.StringWidth(code) - 1
-			name = strings.TrimSpace(runewidth.Truncate(name, available, "...") + " " + code)
+			available := width - codeWidth - 1
+			name = strings.TrimSpace(runewidth.Truncate(name, available, "...") + " " + codeLabel)
 		}
 	}
 	name = runewidth.FillRight(name, width)
