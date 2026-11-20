@@ -107,6 +107,9 @@ func TestCommandCursorEditsAndSavesMultibyteInput(t *testing.T) {
 	if cursor == nil || cursor.Position.X >= m.width {
 		t.Fatalf("end cursor outside command viewport: %+v", cursor)
 	}
+	if cursor.Shape != tea.CursorBar {
+		t.Fatalf("command cursor shape = %v, want bar", cursor.Shape)
+	}
 	update(tea.KeyPressMsg{Code: tea.KeyHome})
 	update(tea.KeyPressMsg{Code: tea.KeyRight})
 	cursor = m.View().Cursor

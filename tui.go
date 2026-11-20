@@ -749,6 +749,7 @@ func (m terminal) View() tea.View {
 		for y, line := range strings.Split(raw, "\n") {
 			if strings.HasPrefix(ansi.Strip(line), "  : ") {
 				cursor = tea.NewCursor(x, y)
+				cursor.Shape = tea.CursorBar
 				break
 			}
 		}
