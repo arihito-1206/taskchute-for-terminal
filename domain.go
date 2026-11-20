@@ -373,7 +373,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 
 func isRoutineCommand(cmd string) bool {
 	switch cmd {
-	case "routine-move", "routine-delete", "routine-code", "routine-section", "routine-place":
+	case "routine-move", "routine-delete", "routine-code", "routine-category", "routine-section", "routine-place":
 		return true
 	default:
 		return false
@@ -409,6 +409,23 @@ func (s *state) applyRoutineCommand(cmd string, args []string, sections []sectio
 		if i := slices.Index(s.Order, id); i >= 0 {
 			s.Order = slices.Delete(s.Order, i, i+1)
 		}
+	case "routine-category":
+		if len(args) < 2 {
+			return errInvalidCommand
+		}
+		r, ok := s.Routines[args[0]]
+		if !ok {
+			return errors.New("routine not found")
+		}
+		category := strings.TrimSpace(strings.Join(args[1:], " "))
+		if category == "" {
+			return errInvalidCommand
+		}
+		if category == "-" {
+			category = ""
+		}
+		r.Category = category
+		s.Routines[args[0]] = r
 	case "routine-code":
 		if len(args) != 2 {
 			return errInvalidCommand

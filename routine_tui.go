@@ -82,6 +82,11 @@ func (m *terminal) routineKey(key string) {
 		return
 	case "c":
 		if id := m.routineTarget(list); id != "" {
+			m.openCommand("routine-category " + id + " " + m.data.Routines[id].Category)
+		}
+		return
+	case "C":
+		if id := m.routineTarget(list); id != "" {
 			m.openCommand("routine-code " + id + " " + m.data.Routines[id].WorkCode)
 		}
 		return
@@ -141,7 +146,7 @@ func (m *terminal) moveRoutine(list routineList, key string) {
 }
 
 func (m terminal) drawRoutines(line func(string), width int) {
-	line("  ROUTINES | j/k select | J/K move | b section | c code | dd delete | Esc back")
+	line("  ROUTINES | j/k select | J/K move | b section | c category | C code | dd delete | Esc back")
 	list := m.routineList()
 	repeatWidth := min(27, max(7, width/3))
 	nameWidth := max(8, width-repeatWidth-14)
@@ -160,7 +165,7 @@ func (m terminal) drawRoutines(line func(string), width int) {
 		if i == m.routineIndex {
 			arrow = "> "
 		}
-		name := runewidth.FillRight(runewidth.Truncate(r.Title, nameWidth, "…"), nameWidth)
+		name := runewidth.FillRight(runewidth.Truncate(title(&task{Title: r.Title, Category: r.Category}), nameWidth, "…"), nameWidth)
 		repeats := runewidth.FillRight(runewidth.Truncate(repeat, repeatWidth, "…"), repeatWidth)
 		line(fmt.Sprintf("%s%s  %s %6s", arrow, name, repeats, estimateLabel(r.Minutes)))
 	}, nil)

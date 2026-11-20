@@ -96,7 +96,7 @@ func TestRoutineWorkCodeEditingReturnsToRoutineList(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := terminal{app: application{store: repo}, data: s, day: day, now: now}
-	m = sectionPress(m, 'v', 'c')
+	m = sectionPress(m, 'v', 'C')
 	if m.input != "routine-code r1 PJ-04" {
 		t.Fatalf("did not prefill the current code: %q", m.input)
 	}
@@ -104,7 +104,7 @@ func TestRoutineWorkCodeEditingReturnsToRoutineList(t *testing.T) {
 	if m.mode != "routines" || m.data.Routines["r1"].WorkCode != "PJ-042" {
 		t.Fatalf("edit did not save and return to routines: %q", m.mode)
 	}
-	m = sectionPress(m, 'c', tea.KeyEsc)
+	m = sectionPress(m, 'C', tea.KeyEsc)
 	if m.mode != "routines" || m.data.Routines["r1"].WorkCode != "PJ-042" {
 		t.Fatal("cancel did not return to routines")
 	}

@@ -122,7 +122,7 @@ func (m terminal) render(width int) string {
 		} else {
 			line("  " + commandUsage(m.input))
 			words := strings.Fields(m.input)
-			categoryInput = len(words) > 0 && words[0] == "category"
+			categoryInput = len(words) > 0 && (words[0] == "category" || words[0] == "routine-category")
 			if len(words) >= 2 && words[1] == "@" && words[0] != "add" && words[0] != "routine-code" {
 				if target := m.targetIn(list); target != nil {
 					line("  @ " + title(target))

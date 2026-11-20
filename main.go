@@ -15,6 +15,7 @@ import (
 const commands = `add [MIN] TITLE | start [ID] | done | ls | status
 rename ID TITLE | estimate ID MIN|- | category ID NAME|- | note ID TEXT
 code ID CODE|- | routine-code ID CODE|-
+routine-category ID NAME|-
 set-start ID HHMM | set-end ID HHMM|- [INTERVAL] | reset ID | move ID before|after ID
 routine ID REPEAT [MIN] | routine-move ID up|down | routine-delete ID
 REPEAT: daily[/N] | weekday[/N] | holiday[/N] | mon,wed[/N] | weekly:N:WEEKDAY | monthly:DAY[/N] | monthly:WEEK:WEEKDAY[/N]

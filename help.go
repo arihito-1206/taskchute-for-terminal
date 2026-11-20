@@ -29,6 +29,7 @@ var commandGuides = []commandGuide{
 	{"routine-delete ID", "Stop generating tasks from the routine and keep saved tasks."},
 	{"section @ SECTION|-", "Assign a task to a section / - clears."},
 	{"routine-section ID SECTION|-", "Set the default section for a routine / - clears."},
+	{"routine-category ID NAME|-", "Set the default category for a routine / - clears."},
 	{"routine-code ID CODE|-", "Set the default work code for a routine / - clears."},
 	{"delete ID...", "Delete tasks together."},
 	{"undo-delete", "Restore the latest deletion."},
