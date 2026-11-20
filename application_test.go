@@ -68,6 +68,39 @@ func TestSuggestions(t *testing.T) {
 
 }
 
+func TestCommandCursorEditsAndSavesMultibyteInput(t *testing.T) {
+	now := time.Now()
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	m := terminal{app: application{store: repo}, data: &state{}, now: now, day: now.Format(dateLayout), width: 16}
+	update := func(msg tea.Msg) {
+		t.Helper()
+		next, _ := m.Update(msg)
+		m = next.(terminal)
+	}
+	update(tea.KeyPressMsg{Code: ':', Text: ":"})
+	update(tea.PasteMsg{Content: "add 15 長いタスク"})
+	cursor := m.View().Cursor
+	if cursor == nil || cursor.Position.X >= m.width {
+		t.Fatalf("end cursor outside command viewport: %+v", cursor)
+	}
+	update(tea.KeyPressMsg{Code: tea.KeyHome})
+	update(tea.KeyPressMsg{Code: tea.KeyRight})
+	cursor = m.View().Cursor
+	if cursor == nil || cursor.Position.X != 5 {
+		t.Fatalf("cursor didn't move within the command: %+v", cursor)
+	}
+	update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	update(tea.KeyPressMsg{Code: tea.KeyDelete})
+	update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	update(tea.PasteMsg{Content: "イトル"})
+	update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	saved, err := repo.load()
+	if err != nil || len(saved.Tasks) != 1 || saved.Tasks[0].Title != "長いタイトル" {
+		t.Fatalf("edited command was not saved: %+v, %v", saved, err)
+	}
+}
+
 func TestInvalidSnapshot(t *testing.T) {
 	for _, task := range []string{"null", `{"id":"a","state":"running"}`} {
 		if _, err := decodeState([]byte(`{"schema":1,"tasks":[` + task + `]}`)); err == nil {

@@ -60,6 +60,7 @@ var helpLines = func() []string {
 		"", "EDIT", "  r           Rename", "  e           Edit estimate", "  S / F       Edit start / end time", "  c           Set category", "  u           Reset to Pending",
 		"", "NAVIGATION", "  R / v       Set routine / view routines", "  Alt+h/l     Previous / next day", "  : or i      Enter a command", "  q           Quit",
 		"", "COMMANDS   @ = selected task",
+		"  Left/Right  Move the cursor", "  Home/End    Jump to start/end of input",
 	}
 	for _, guide := range commandGuides {
 		lines = append(lines, "  "+guide.syntax)

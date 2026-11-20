@@ -55,6 +55,7 @@ type terminal struct {
 	timelineOffset                                       int
 	helpOffset                                           int
 	suggestion                                           int
+	inputCursor                                          int
 	routineOffset                                        int
 	app                                                  application
 	data                                                 *state
@@ -291,12 +292,13 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateNote(msg)
 		}
 		if m.mode == "command" {
-			m.input += strings.Map(func(r rune) rune {
+			m.insertCommandText(strings.Map(func(r rune) rune {
 				if unicode.IsControl(r) {
 					return ' '
 				}
 				return r
-			}, event.Content)
+			}, event.Content))
+			m.suggestion = 0
 		}
 	case tea.KeyPressMsg:
 		if event.String() == "ctrl+c" {
@@ -343,6 +345,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			return
 		case "tab":
 			m.input = prefix + matches[m.suggestion%len(matches)]
+			m.inputCursor = len(m.input)
 			m.suggestion = 0
 			return
 		}
@@ -351,11 +354,27 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	switch key.String() {
 	case "esc":
 		m.mode, m.input, m.notice = "", "", ""
+		m.inputCursor = 0
 	case "ctrl+u":
-		m.input = ""
+		m.input, m.inputCursor = "", 0
+	case "left", "ctrl+b":
+		_, size := utf8.DecodeLastRuneInString(m.input[:m.inputCursor])
+		m.inputCursor -= size
+	case "right", "ctrl+f":
+		_, size := utf8.DecodeRuneInString(m.input[m.inputCursor:])
+		m.inputCursor += size
+	case "home", "ctrl+a":
+		m.inputCursor = 0
+	case "end", "ctrl+e":
+		m.inputCursor = len(m.input)
 	case "backspace":
-		_, size := utf8.DecodeLastRuneInString(m.input)
-		m.input = m.input[:len(m.input)-size]
+		_, size := utf8.DecodeLastRuneInString(m.input[:m.inputCursor])
+		start := m.inputCursor - size
+		m.input = m.input[:start] + m.input[m.inputCursor:]
+		m.inputCursor = start
+	case "delete":
+		_, size := utf8.DecodeRuneInString(m.input[m.inputCursor:])
+		m.input = m.input[:m.inputCursor] + m.input[m.inputCursor+size:]
 	case "enter":
 		input := strings.TrimSpace(m.input)
 		if input == "" {
@@ -408,12 +427,28 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			}
 			m.mode = ""
 		}
-		m.input = ""
+		m.input, m.inputCursor = "", 0
 	default:
 		if key.Text != "" {
-			m.input += key.Text
+			m.insertCommandText(key.Text)
 		}
 	}
+}
+
+func (m *terminal) insertCommandText(value string) {
+	m.input = m.input[:m.inputCursor] + value + m.input[m.inputCursor:]
+	m.inputCursor += len(value)
+}
+
+func (m terminal) commandLine(width int) (string, int) {
+	const prompt = "  : "
+	room := max(0, width-len(prompt))
+	before := terminalText(m.input[:m.inputCursor], false)
+	after := terminalText(m.input[m.inputCursor:], false)
+	before = ansi.TruncateLeft(before, max(0, ansi.StringWidth(before)-max(0, room-1)), "")
+	used := ansi.StringWidth(before)
+	after = ansi.Truncate(after, max(0, room-used), "")
+	return "\x1b[36;1m" + prompt + "\x1b[0m" + before + after, min(width-1, len(prompt)+used)
 }
 
 func (m *terminal) openSectionPicker(command, id, day, current string) {
@@ -697,6 +732,8 @@ func (m *terminal) normalKey(key string) bool {
 			break
 		}
 		m.mode, m.input, m.notice = "command", prefix, ""
+		m.inputCursor = len(prefix)
+		m.suggestion = 0
 		if key == "c" {
 			m.notice = "💼 work / 仕事   🏠 home / 家事   🎨 hobby / 趣味   ☕ rest / 休憩 | - clears"
 		}
@@ -733,9 +770,10 @@ func (m terminal) View() tea.View {
 	}
 	raw := m.render(width)
 	if m.mode == "command" {
+		_, x := m.commandLine(width)
 		for y, line := range strings.Split(raw, "\n") {
 			if strings.HasPrefix(ansi.Strip(line), "  : ") {
-				cursor = tea.NewCursor(min(width-1, ansi.StringWidth(line)), y)
+				cursor = tea.NewCursor(x, y)
 				break
 			}
 		}
@@ -798,8 +836,8 @@ func (m terminal) render(width int) string {
 		m.drawRoutines(line, width)
 	case "command":
 		line("  " + commandUsage(m.input))
-		m.input = terminalText(m.input, false)
-		fmt.Fprintln(&b, "\x1b[36;1m  : \x1b[0m"+ansi.TruncateLeft(m.input, max(0, ansi.StringWidth(m.input)-max(0, width-5)), ""))
+		command, _ := m.commandLine(width)
+		fmt.Fprintln(&b, command)
 		if _, matches := m.addSuggestions(); len(matches) > 0 {
 			line("  Tab completes | Up/Down select")
 			for i, name := range matches {
