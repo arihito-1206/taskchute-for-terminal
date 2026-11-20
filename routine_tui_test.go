@@ -109,3 +109,21 @@ func TestRoutineWorkCodeEditingReturnsToRoutineList(t *testing.T) {
 		t.Fatal("cancel did not return to routines")
 	}
 }
+
+func TestRoutineRepeatCanBeSetFromTaskList(t *testing.T) {
+	now := time.Date(2026, 11, 20, 9, 0, 0, 0, time.Local)
+	day := now.Format(dateLayout)
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{{ID: "task", Day: day, Title: "Read", State: "pending"}}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	m := terminal{app: application{store: repo}, data: s, day: day, now: now}
+	m = sectionPress(m, 'R')
+	m = sectionPress(m, []rune("monthly:2:tue 15")...)
+	m = sectionPress(m, tea.KeyEnter, 'v')
+	view := m.render(100)
+	if !strings.Contains(view, "monthly:2:tue") || !strings.Contains(view, "15m") {
+		t.Fatalf("routine view omitted the repeat rule or estimate:\n%s", view)
+	}
+}

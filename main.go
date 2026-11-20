@@ -15,7 +15,8 @@ const commands = `add [MIN] TITLE | start [ID] | done | pause | ls | status
 rename ID TITLE | estimate ID MIN|- | category ID NAME|- | note ID TEXT
 code ID CODE|- | routine-code ID CODE|-
 set-start ID HHMM | set-end ID HHMM|- | reset ID | move ID before|after ID
-routine ID daily|mon,wed,fri [MIN] | routine-move ID up|down
+routine ID REPEAT [MIN] | routine-move ID up|down
+REPEAT: daily[/N] | weekday[/N] | holiday[/N] | mon,wed[/N] | monthly:DAY[/N] | monthly:WEEK:WEEKDAY[/N]
 section ID SECTION|- | routine-section ID SECTION|-
 delete ID... | undo-delete | import-python PATH
 backup | restore-backup`

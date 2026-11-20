@@ -59,6 +59,7 @@ type routine struct {
 	SectionID string   `json:"section_id,omitempty"`
 	FirstDay  string   `json:"first_day"`
 	Days      []string `json:"days"`
+	Repeat    string   `json:"repeat,omitempty"`
 	Minutes   *float64 `json:"minutes"`
 }
 
@@ -94,11 +95,13 @@ func identifier() string {
 }
 
 func (s *state) fill(day string) {
-	d, _ := time.Parse(dateLayout, day)
-	weekday := strings.ToLower(d.Weekday().String()[:3])
+	d, err := time.Parse(dateLayout, day)
+	if err != nil {
+		return
+	}
 	for _, id := range s.Order {
 		r := s.Routines[id]
-		if day < r.FirstDay || !slices.Contains(r.Days, weekday) {
+		if !r.occursOn(d) {
 			continue
 		}
 		found := slices.ContainsFunc(s.Tasks, func(t *task) bool { return t.Day == day && t.RoutineID == id })
@@ -554,21 +557,18 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			if len(args) < 1 || len(args) > 2 {
 				return invalid
 			}
-			weekdays := []string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
-			days := strings.Split(strings.ToLower(args[0]), ",")
-			if strings.EqualFold(args[0], "daily") {
-				days = weekdays
-			}
-			for _, d := range days {
-				if !slices.Contains(weekdays, d) {
-					return errors.New("use daily or mon,wed,fri")
-				}
-			}
 			r, exists := s.Routines[t.RoutineID]
 			if !exists {
 				r = routine{ID: identifier(), Title: t.Title, WorkCode: t.WorkCode, Category: t.Category, SectionID: t.SectionID, FirstDay: day, Minutes: t.Minutes}
 			}
-			r.Days = days
+			if err := r.setRepeat(args[0]); err != nil {
+				return err
+			}
+			if r.Repeat != "" {
+				if _, err := time.Parse(dateLayout, r.FirstDay); err != nil {
+					r.FirstDay = day
+				}
+			}
 			if len(args) == 2 {
 				r.Minutes, err = minutes(args[1])
 				if err != nil {

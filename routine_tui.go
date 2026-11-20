@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -196,7 +195,7 @@ func (m *terminal) moveRoutine(list routineList, key string) {
 func (m terminal) drawRoutines(line func(string), width int) {
 	line("  ROUTINES | j/k select | J/K move | b section | c code | Esc back")
 	list := m.routineList()
-	repeatWidth := min(27, max(7, width/4))
+	repeatWidth := min(27, max(7, width/3))
 	nameWidth := max(8, width-repeatWidth-14)
 	if len(list.ids) == 0 {
 		line("  No routines yet. Select a task and press R.")
@@ -207,19 +206,16 @@ func (m terminal) drawRoutines(line func(string), width int) {
 	drawRows := func(start, stop, headers int) {
 		for i := max(start, m.routineOffset-headers); i < min(stop, end-headers); i++ {
 			r := m.data.Routines[list.ids[i]]
-			days := strings.Join(r.Days, ",")
-			if len(r.Days) == 7 {
-				days = "daily"
-			}
+			repeat := r.repeatLabel()
 			if len(list.groups) == 0 && r.SectionID != "" {
-				days += " | " + r.SectionID
+				repeat += " | " + r.SectionID
 			}
 			arrow := "  "
 			if i == m.routineIndex {
 				arrow = "> "
 			}
 			name := runewidth.FillRight(runewidth.Truncate(r.Title, nameWidth, "…"), nameWidth)
-			repeats := runewidth.FillRight(runewidth.Truncate(days, repeatWidth, "…"), repeatWidth)
+			repeats := runewidth.FillRight(runewidth.Truncate(repeat, repeatWidth, "…"), repeatWidth)
 			line(fmt.Sprintf("%s%s  %s %6s", arrow, name, repeats, estimateLabel(r.Minutes)))
 		}
 	}
