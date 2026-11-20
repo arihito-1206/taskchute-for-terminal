@@ -13,7 +13,6 @@ var commandGuides = []commandGuide{
 	{"add [MIN] TITLE", "add Read  /  add 15 Read"},
 	{"start [ID]", "Start next or by ID. A done task starts a copy."},
 	{"done", "Finish the running task."},
-	{"pause", "Pause the running task."},
 	{"ls", "Show today's task list."},
 	{"status", "Show the focus view."},
 	{"rename @ TITLE", "rename @ Read a chapter"},
@@ -54,7 +53,7 @@ func commandUsage(input string) string {
 var helpLines = func() []string {
 	lines := []string{
 		"TASKS",
-		"  s / Enter   Start or finish", "              On Done, start a copy", "  p           Pause", "  a           Add a task", "  n           Open task notes",
+		"  s / Enter   Start or finish", "              On Done, start a copy", "  a           Add a task", "  n           Open task notes",
 		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task across rows or sections", "  g / G       First / last task",
 		"  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
 		"  L           Toggle current section (Esc to close)", "  b           Choose a section for the task or routine",

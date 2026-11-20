@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const commands = `add [MIN] TITLE | start [ID] | done | pause | ls | status
+const commands = `add [MIN] TITLE | start [ID] | done | ls | status
 rename ID TITLE | estimate ID MIN|- | category ID NAME|- | note ID TEXT
 code ID CODE|- | routine-code ID CODE|-
 set-start ID HHMM | set-end ID HHMM|- [INTERVAL] | reset ID | move ID before|after ID

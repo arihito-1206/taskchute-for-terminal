@@ -62,7 +62,7 @@ func row(t *task, day string, now time.Time, width int, codeLabel string) string
 		if t.State == "done" && last.End != nil {
 			end = timeLabel(*last.End, day, now.Location())
 		}
-		if t.State == "pending" {
+		if t.legacyPaused() {
 			label = "Paused"
 		}
 	}

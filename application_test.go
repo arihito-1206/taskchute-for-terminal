@@ -433,3 +433,22 @@ func TestEditEarlierExecutionInterval(t *testing.T) {
 		t.Fatalf("edit did not update just the first interval: %+v, %s", got, m.notice)
 	}
 }
+
+func TestStartingLegacyPausedTaskKeepsSeparateHistory(t *testing.T) {
+	now := time.Now()
+	end := now.Add(-time.Minute)
+	original := &task{ID: "old", Day: now.Format(dateLayout), State: "pending",
+		Sessions: []session{{Start: end.Add(-time.Hour), End: &end}},
+	}
+	s := &state{Tasks: []*task{original}}
+	if err := s.apply(original.Day, "start", []string{original.ID}, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	restarted := s.running()
+	if original.State != "done" || len(original.Sessions) != 1 || !original.Sessions[0].End.Equal(end) {
+		t.Fatal("original execution history was changed")
+	}
+	if restarted == nil || restarted.ID == original.ID || len(restarted.Sessions) != 1 || !restarted.Sessions[0].Start.Equal(now) {
+		t.Fatalf("expected a separate running task, got %+v", restarted)
+	}
+}

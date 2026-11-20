@@ -721,7 +721,7 @@ func (m *terminal) normalKey(key string) bool {
 		}
 		if target.State == "running" {
 			m.execute("done")
-		} else if m.execute("start", target.ID) && target.State == "done" {
+		} else if m.execute("start", target.ID) && (target.State == "done" || target.legacyPaused()) {
 			for i, row := range m.visibleRows() {
 				if row.State == "running" {
 					m.selected = i
@@ -729,8 +729,6 @@ func (m *terminal) normalKey(key string) bool {
 				}
 			}
 		}
-	case "p":
-		m.execute("pause")
 	case "U":
 		if m.list {
 			m.execute("undo-delete")

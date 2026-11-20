@@ -51,6 +51,10 @@ type task struct {
 	Deleted   bool      `json:"deleted,omitempty"`
 }
 
+func (t *task) legacyPaused() bool {
+	return t.State == "pending" && len(t.Sessions) > 0
+}
+
 type routine struct {
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
@@ -248,7 +252,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			return errInvalidCommand
 		}
 		if s.running() != nil {
-			return errors.New("finish or pause the running task first")
+			return errors.New("finish the running task first")
 		}
 		rows := s.rows(day)
 		var t *task
@@ -266,7 +270,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 				}
 			}
 		}
-		if t != nil && t.State == "done" {
+		if t != nil && (t.State == "done" || t.legacyPaused()) {
+			// Keep execution history on the original task.
+			t.State = "done"
 			copy := *t
 			copy.ID = identifier()
 			copy.State = "pending"
@@ -280,7 +286,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		t.State = "running"
 		t.Sessions = append(t.Sessions, session{Start: now})
-	case "done", "pause":
+	case "done":
 		if len(args) != 0 {
 			return errInvalidCommand
 		}
@@ -289,10 +295,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			return errors.New("no task is running")
 		}
 		running.Sessions[len(running.Sessions)-1].End = &now
-		running.State = "pending"
-		if cmd == "done" {
-			running.State = "done"
-		}
+		running.State = "done"
 	case "delete":
 		if len(args) == 0 {
 			return errInvalidCommand
@@ -540,7 +543,7 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 			old.Start = start
 		} else {
 			if s.running() != nil {
-				return errors.New("finish or pause the running task first")
+				return errors.New("finish the running task first")
 			}
 			t.State = "running"
 			t.Sessions = append(t.Sessions, session{Start: start})
@@ -569,7 +572,7 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 				return errors.New("cannot resume a task scheduled for a future day")
 			}
 			if s.running() != nil {
-				return errors.New("finish or pause the running task first")
+				return errors.New("finish the running task first")
 			}
 			selected.End = nil
 			t.State = "running"
