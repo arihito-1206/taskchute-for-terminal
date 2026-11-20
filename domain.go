@@ -96,18 +96,28 @@ func identifier() string {
 
 func (s *state) fill(day string) {
 	d, err := time.Parse(dateLayout, day)
-	if err != nil {
+	if err != nil || len(s.Order) == 0 {
 		return
 	}
+	// Deleted occurrences still count so fill does not recreate them.
+	existing := make(map[string]bool, len(s.Order))
+	for _, t := range s.Tasks {
+		if t.Day == day && t.RoutineID != "" {
+			existing[t.RoutineID] = true
+		}
+	}
 	for _, id := range s.Order {
-		r := s.Routines[id]
-		if !r.occursOn(d) {
+		r, ok := s.Routines[id]
+		if !ok || existing[id] || !r.occursOn(d) {
 			continue
 		}
-		found := slices.ContainsFunc(s.Tasks, func(t *task) bool { return t.Day == day && t.RoutineID == id })
-		if !found {
-			s.Tasks = append(s.Tasks, &task{ID: occurrenceID(id, day), Day: day, RoutineID: id, Title: r.Title, WorkCode: r.WorkCode, Category: r.Category, SectionID: r.SectionID, Minutes: r.Minutes, State: "pending", Sessions: []session{}})
-		}
+		s.Tasks = append(s.Tasks, &task{
+			ID: occurrenceID(id, day), Day: day, RoutineID: id,
+			Title: r.Title, WorkCode: r.WorkCode, Category: r.Category,
+			SectionID: r.SectionID, Minutes: r.Minutes,
+			State: "pending", Sessions: []session{},
+		})
+		existing[id] = true
 	}
 }
 
@@ -174,29 +184,29 @@ func parseTime(day, value string, now time.Time) (time.Time, error) {
 	return t, nil
 }
 
-func (s *state) apply(day, cmd string, args []string, now time.Time, sections []section) error {
-	rows := s.rows(day)
-	running := s.running()
-	find := func(ref string) (*task, error) {
-		var found *task
-		for _, t := range rows {
-			if ref != "" && strings.HasPrefix(t.ID, ref) {
-				if found != nil {
-					return nil, errors.New("task ID is ambiguous")
-				}
-				found = t
+var errInvalidCommand = errors.New("invalid command or arguments; use help")
+
+func findTask(rows []*task, ref string) (*task, error) {
+	var found *task
+	for _, t := range rows {
+		if ref != "" && strings.HasPrefix(t.ID, ref) {
+			if found != nil {
+				return nil, errors.New("task ID is ambiguous")
 			}
+			found = t
 		}
-		if found == nil {
-			return nil, errors.New("task not found on this day")
-		}
-		return found, nil
 	}
-	invalid := errors.New("invalid command or arguments; use help")
+	if found == nil {
+		return nil, errors.New("task not found on this day")
+	}
+	return found, nil
+}
+
+func (s *state) apply(day, cmd string, args []string, now time.Time, sections []section) error {
 	switch cmd {
 	case "add":
 		if len(args) == 0 {
-			return invalid
+			return errInvalidCommand
 		}
 		var estimate *float64
 		if len(args) > 1 {
@@ -212,7 +222,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		title := strings.TrimSpace(strings.Join(args, " "))
 		if title == "" {
-			return invalid
+			return errInvalidCommand
 		}
 		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}})
 	case "start":
@@ -220,15 +230,16 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			return errors.New("cannot start a task scheduled for a future day")
 		}
 		if len(args) > 1 {
-			return invalid
+			return errInvalidCommand
 		}
-		if running != nil {
+		if s.running() != nil {
 			return errors.New("finish or pause the running task first")
 		}
+		rows := s.rows(day)
 		var t *task
 		if len(args) == 1 {
 			var err error
-			t, err = find(args[0])
+			t, err = findTask(rows, args[0])
 			if err != nil {
 				return err
 			}
@@ -256,8 +267,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		t.Sessions = append(t.Sessions, session{Start: now})
 	case "done", "pause":
 		if len(args) != 0 {
-			return invalid
+			return errInvalidCommand
 		}
+		running := s.running()
 		if running == nil || len(running.Sessions) == 0 {
 			return errors.New("no task is running")
 		}
@@ -268,12 +280,13 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 	case "delete":
 		if len(args) == 0 {
-			return invalid
+			return errInvalidCommand
 		}
 		batch := deletion{Day: day}
+		rows := s.rows(day)
 		var targets []*task
 		for _, id := range args {
-			t, err := find(id)
+			t, err := findTask(rows, id)
 			if err != nil {
 				return err
 			}
@@ -291,7 +304,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		s.Deletions = append(s.Deletions, batch)
 	case "undo-delete":
 		if len(args) != 0 {
-			return invalid
+			return errInvalidCommand
 		}
 		for i := len(s.Deletions) - 1; i >= 0; i-- {
 			batch := s.Deletions[i]
@@ -307,9 +320,35 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			return nil
 		}
 		return errors.New("no deletion to undo for this day")
+	default:
+		if len(args) == 0 {
+			return errInvalidCommand
+		}
+		rows := s.rows(day)
+		t, err := findTask(rows, args[0])
+		if err != nil {
+			return err
+		}
+		args = args[1:]
+		return s.applyTaskCommand(t, rows, cmd, args, now, sections)
+	}
+	return nil
+}
+
+func isRoutineCommand(cmd string) bool {
+	switch cmd {
+	case "routine-move", "routine-delete", "routine-code", "routine-section", "routine-place":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *state) applyRoutineCommand(cmd string, args []string, sections []section) error {
+	switch cmd {
 	case "routine-move":
 		if len(args) != 2 || (args[1] != "up" && args[1] != "down") {
-			return invalid
+			return errInvalidCommand
 		}
 		i := slices.Index(s.Order, args[0])
 		if i < 0 {
@@ -324,7 +363,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 	case "routine-delete":
 		if len(args) != 1 {
-			return invalid
+			return errInvalidCommand
 		}
 		id := args[0]
 		if _, ok := s.Routines[id]; !ok {
@@ -336,7 +375,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 	case "routine-code":
 		if len(args) != 2 {
-			return invalid
+			return errInvalidCommand
 		}
 		r, ok := s.Routines[args[0]]
 		if !ok {
@@ -350,7 +389,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		s.Routines[args[0]] = r
 	case "routine-section", "routine-place":
 		if len(args) != 2 && (cmd != "routine-place" || len(args) != 4) {
-			return invalid
+			return errInvalidCommand
 		}
 		r, ok := s.Routines[args[0]]
 		if !ok {
@@ -362,7 +401,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		if len(args) == 4 {
 			if args[2] != "before" && args[2] != "after" {
-				return invalid
+				return errInvalidCommand
 			}
 			anchor, ok := s.Routines[args[3]]
 			i, j := slices.Index(s.Order, args[0]), slices.Index(s.Order, args[3])
@@ -388,213 +427,212 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		r.SectionID = destination
 		s.Routines[args[0]] = r
-	default:
-		if len(args) == 0 {
-			return invalid
+	}
+	return nil
+}
+
+func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []string, now time.Time, sections []section) error {
+	switch cmd {
+	case "edit-note", "delete-note":
+		want := 4
+		if cmd == "delete-note" {
+			want = 3
 		}
-		t, err := find(args[0])
+		if len(args) != want {
+			return errInvalidCommand
+		}
+		n, err := strconv.Atoi(args[0])
+		if err != nil || n < 1 || n > len(t.Notes) {
+			return errors.New("comment not found")
+		}
+		entry := &t.Notes[n-1]
+		if entry.At.Format(time.RFC3339Nano) != args[1] || entry.Text != args[2] {
+			return errors.New("comment changed on disk; reopen the note and try again")
+		}
+		if cmd == "delete-note" {
+			t.Notes = slices.Delete(t.Notes, n-1, n)
+			return nil
+		}
+		if strings.TrimSpace(args[3]) == "" {
+			return errors.New("comment cannot be empty")
+		}
+		entry.Text = args[3]
+	case "rename", "category", "note":
+		value := strings.TrimSpace(strings.Join(args, " "))
+		if value == "" {
+			return errInvalidCommand
+		}
+		switch cmd {
+		case "rename":
+			t.Title = value
+		case "category":
+			if value == "-" {
+				value = ""
+			}
+			t.Category = value
+		case "note":
+			t.Notes = append(t.Notes, note{Text: value, At: now})
+		}
+	case "code":
+		code, err := parseWorkCode(cmd, args)
 		if err != nil {
 			return err
 		}
-		args = args[1:]
-		switch cmd {
-		case "edit-note", "delete-note":
-			want := 4
-			if cmd == "delete-note" {
-				want = 3
-			}
-			if len(args) != want {
-				return invalid
-			}
-			n, err := strconv.Atoi(args[0])
-			if err != nil || n < 1 || n > len(t.Notes) {
-				return errors.New("comment not found")
-			}
-			entry := &t.Notes[n-1]
-			if entry.At.Format(time.RFC3339Nano) != args[1] || entry.Text != args[2] {
-				return errors.New("comment changed on disk; reopen the note and try again")
-			}
-			if cmd == "delete-note" {
-				t.Notes = slices.Delete(t.Notes, n-1, n)
-				return nil
-			}
-			if strings.TrimSpace(args[3]) == "" {
-				return errors.New("comment cannot be empty")
-			}
-			entry.Text = args[3]
-		case "rename", "category", "note":
-			value := strings.TrimSpace(strings.Join(args, " "))
-			if value == "" {
-				return invalid
-			}
-			switch cmd {
-			case "rename":
-				t.Title = value
-			case "category":
-				if value == "-" {
-					value = ""
-				}
-				t.Category = value
-			case "note":
-				t.Notes = append(t.Notes, note{Text: value, At: now})
-			}
-		case "code":
-			code, err := parseWorkCode(cmd, args)
-			if err != nil {
-				return err
-			}
-			t.WorkCode = code
-		case "estimate":
-			if len(args) != 1 {
-				return invalid
-			}
-			t.Minutes, err = minutes(args[0])
+		t.WorkCode = code
+	case "estimate":
+		if len(args) != 1 {
+			return errInvalidCommand
+		}
+		estimate, err := minutes(args[0])
+		if err != nil {
 			return err
-		case "section":
-			if len(args) != 1 {
-				return invalid
+		}
+		t.Minutes = estimate
+	case "section":
+		if len(args) != 1 {
+			return errInvalidCommand
+		}
+		destination := args[0]
+		if destination == "-" {
+			destination = ""
+		}
+		if err := checkSectionPlacement(t, destination, sections, now); err != nil {
+			return err
+		}
+		t.SectionID = destination
+	case "reset":
+		if len(args) != 0 {
+			return errInvalidCommand
+		}
+		t.State = "pending"
+		t.Sessions = []session{}
+	case "set-start":
+		if len(args) != 1 {
+			return errInvalidCommand
+		}
+		start, err := parseTime(t.Day, args[0], now)
+		if err != nil {
+			return err
+		}
+		if start.After(now) {
+			return errors.New("start cannot be in the future")
+		}
+		if len(t.Sessions) > 0 {
+			old := &t.Sessions[0]
+			if old.End != nil && start.After(*old.End) {
+				return errors.New("start cannot be after end")
 			}
-			destination := args[0]
+			old.Start = start
+		} else {
+			if s.running() != nil {
+				return errors.New("finish or pause the running task first")
+			}
+			t.State = "running"
+			t.Sessions = append(t.Sessions, session{Start: start})
+		}
+	case "set-end":
+		if len(args) != 1 {
+			return errInvalidCommand
+		}
+		if t.State != "done" || len(t.Sessions) == 0 {
+			return errors.New("select a completed task")
+		}
+		last := &t.Sessions[len(t.Sessions)-1]
+		if last.End == nil {
+			return errors.New("task has no end time")
+		}
+		if args[0] == "-" {
+			if t.Day > now.Format(dateLayout) {
+				return errors.New("cannot resume a task scheduled for a future day")
+			}
+			if s.running() != nil {
+				return errors.New("finish or pause the running task first")
+			}
+			last.End = nil
+			t.State = "running"
+			return nil
+		}
+		end, err := parseTime(last.End.In(now.Location()).Format(dateLayout), args[0], now)
+		if err != nil {
+			return err
+		}
+		if end.Before(last.Start) || end.After(now) {
+			return errors.New("end must be between start and now")
+		}
+		last.End = &end
+	case "move", "move-section":
+		destination := t.SectionID
+		if cmd == "move-section" {
+			if len(args) != 1 && len(args) != 3 {
+				return errInvalidCommand
+			}
+			if t.State != "pending" {
+				return errors.New("choose a pending task")
+			}
+			destination = args[0]
 			if destination == "-" {
 				destination = ""
 			}
 			if err := checkSectionPlacement(t, destination, sections, now); err != nil {
 				return err
 			}
-			t.SectionID = destination
-		case "reset":
-			if len(args) != 0 {
-				return invalid
-			}
-			t.State = "pending"
-			t.Sessions = []session{}
-		case "set-start":
-			if len(args) != 1 {
-				return invalid
-			}
-			start, err := parseTime(t.Day, args[0], now)
-			if err != nil {
-				return err
-			}
-			if start.After(now) {
-				return errors.New("start cannot be in the future")
-			}
-			if len(t.Sessions) > 0 {
-				old := &t.Sessions[0]
-				if old.End != nil && start.After(*old.End) {
-					return errors.New("start cannot be after end")
-				}
-				old.Start = start
-			} else {
-				if running != nil {
-					return errors.New("finish or pause the running task first")
-				}
-				t.State = "running"
-				t.Sessions = append(t.Sessions, session{Start: start})
-			}
-		case "set-end":
-			if len(args) != 1 {
-				return invalid
-			}
-			if t.State != "done" || len(t.Sessions) == 0 {
-				return errors.New("select a completed task")
-			}
-			last := &t.Sessions[len(t.Sessions)-1]
-			if last.End == nil {
-				return errors.New("task has no end time")
-			}
-			if args[0] == "-" {
-				if t.Day > now.Format(dateLayout) {
-					return errors.New("cannot resume a task scheduled for a future day")
-				}
-				if running != nil {
-					return errors.New("finish or pause the running task first")
-				}
-				last.End = nil
-				t.State = "running"
+			args = args[1:]
+			if len(args) == 0 {
+				t.SectionID = destination
 				return nil
 			}
-			end, err := parseTime(last.End.In(now.Location()).Format(dateLayout), args[0], now)
-			if err != nil {
-				return err
-			}
-			if end.Before(last.Start) || end.After(now) {
-				return errors.New("end must be between start and now")
-			}
-			last.End = &end
-		case "move", "move-section":
-			destination := t.SectionID
-			if cmd == "move-section" {
-				if len(args) != 1 && len(args) != 3 {
-					return invalid
-				}
-				if t.State != "pending" {
-					return errors.New("choose a pending task")
-				}
-				destination = args[0]
-				if destination == "-" {
-					destination = ""
-				}
-				if err := checkSectionPlacement(t, destination, sections, now); err != nil {
-					return err
-				}
-				args = args[1:]
-				if len(args) == 0 {
-					t.SectionID = destination
-					return nil
-				}
-			}
-			if len(args) != 2 || (args[0] != "before" && args[0] != "after") {
-				return invalid
-			}
-			other, err := find(args[1])
-			if err != nil {
-				return err
-			}
-			if t == other || t.State != "pending" || other.State != "pending" {
-				return errors.New("choose two different pending tasks")
-			}
-			if cmd == "move-section" && taskSection(other, sections, now) != destination {
-				return errors.New("destination task is no longer in that section")
-			}
-			t.SectionID = destination
-			i := slices.Index(s.Tasks, t)
-			s.Tasks = slices.Delete(s.Tasks, i, i+1)
-			j := slices.Index(s.Tasks, other)
-			if args[0] == "after" {
-				j++
-			}
-			s.Tasks = slices.Insert(s.Tasks, j, t)
-		case "routine":
-			if len(args) < 1 || len(args) > 2 {
-				return invalid
-			}
-			r, exists := s.Routines[t.RoutineID]
-			if !exists {
-				r = routine{ID: identifier(), Title: t.Title, WorkCode: t.WorkCode, Category: t.Category, SectionID: t.SectionID, FirstDay: day, Minutes: t.Minutes}
-			}
-			if err := r.setRepeat(args[0]); err != nil {
-				return err
-			}
-			if r.Repeat != "" {
-				if _, err := time.Parse(dateLayout, r.FirstDay); err != nil {
-					r.FirstDay = day
-				}
-			}
-			if len(args) == 2 {
-				r.Minutes, err = minutes(args[1])
-				if err != nil {
-					return err
-				}
-			}
-			if !exists {
-				s.Order = append(s.Order, r.ID)
-			}
-			s.Routines[r.ID] = r
-			t.RoutineID = r.ID
-		default:
-			return fmt.Errorf("unknown command %q", cmd)
 		}
+		if len(args) != 2 || (args[0] != "before" && args[0] != "after") {
+			return errInvalidCommand
+		}
+		other, err := findTask(rows, args[1])
+		if err != nil {
+			return err
+		}
+		if t == other || t.State != "pending" || other.State != "pending" {
+			return errors.New("choose two different pending tasks")
+		}
+		if cmd == "move-section" && taskSection(other, sections, now) != destination {
+			return errors.New("destination task is no longer in that section")
+		}
+		t.SectionID = destination
+		i := slices.Index(s.Tasks, t)
+		s.Tasks = slices.Delete(s.Tasks, i, i+1)
+		j := slices.Index(s.Tasks, other)
+		if args[0] == "after" {
+			j++
+		}
+		s.Tasks = slices.Insert(s.Tasks, j, t)
+	case "routine":
+		if len(args) < 1 || len(args) > 2 {
+			return errInvalidCommand
+		}
+		r, exists := s.Routines[t.RoutineID]
+		if !exists {
+			r = routine{ID: identifier(), Title: t.Title, WorkCode: t.WorkCode, Category: t.Category, SectionID: t.SectionID, FirstDay: t.Day, Minutes: t.Minutes}
+		}
+		if err := r.setRepeat(args[0]); err != nil {
+			return err
+		}
+		if r.Repeat != "" {
+			if _, err := time.Parse(dateLayout, r.FirstDay); err != nil {
+				r.FirstDay = t.Day
+			}
+		}
+		if len(args) == 2 {
+			estimate, err := minutes(args[1])
+			if err != nil {
+				return err
+			}
+			r.Minutes = estimate
+		}
+		if !exists {
+			s.Order = append(s.Order, r.ID)
+		}
+		s.Routines[r.ID] = r
+		t.RoutineID = r.ID
+	default:
+		return fmt.Errorf("unknown command %q", cmd)
 	}
 	return nil
 }

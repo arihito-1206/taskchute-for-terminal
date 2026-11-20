@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 )
 
-// load returns an independent snapshot. update commits the entire change atomically
-// and discards it on error. A database implementation can use a transaction.
+// Both methods return snapshots owned by the caller. update applies change to
+// the current state and commits it atomically with respect to other updates.
+// An error from change discards its mutations. Stores may rerun change when
+// retrying a transaction, so the callback must have no external side effects.
 type stateStore interface {
-	load() (*state, error)
-	update(func(*state) error) (*state, error)
+	load(context.Context) (*state, error)
+	update(context.Context, func(*state) error) (*state, error)
 }
 
 type application struct {
@@ -18,12 +21,12 @@ type application struct {
 	sections []section
 }
 
-func (a application) execute(day, cmd string, args []string, now time.Time) (*state, error) {
+func (a application) execute(ctx context.Context, day, cmd string, args []string, now time.Time) (*state, error) {
 	if cmd == "status" || cmd == "ls" {
 		if len(args) != 0 {
 			return nil, errors.New("unexpected arguments")
 		}
-		s, err := a.store.load()
+		s, err := a.store.load(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -46,12 +49,11 @@ func (a application) execute(day, cmd string, args []string, now time.Time) (*st
 			}
 		}
 	}
-	s, err := a.store.update(func(s *state) error {
-		switch cmd {
-		case "routine-move", "routine-section", "routine-place", "routine-code", "routine-delete":
-		default:
-			s.fill(day)
+	s, err := a.store.update(ctx, func(s *state) error {
+		if isRoutineCommand(cmd) {
+			return s.applyRoutineCommand(cmd, args, a.sections)
 		}
+		s.fill(day)
 		return s.apply(day, cmd, args, now, a.sections)
 	})
 	if err != nil {

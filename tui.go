@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sort"
@@ -90,7 +91,7 @@ func (m *terminal) executeDay(day, cmd string, args ...string) bool {
 	if m.list {
 		selected = m.target()
 	}
-	s, err := m.app.execute(day, cmd, args, time.Now())
+	s, err := m.app.execute(context.Background(), day, cmd, args, time.Now())
 	if err != nil {
 		m.notice = err.Error()
 		return false
@@ -109,7 +110,7 @@ func (m *terminal) executeDay(day, cmd string, args ...string) bool {
 func (m *terminal) changeDay(delta int) {
 	d, _ := time.Parse(dateLayout, m.day)
 	next := d.AddDate(0, 0, delta).Format(dateLayout)
-	s, err := m.app.execute(next, "status", nil, m.now)
+	s, err := m.app.execute(context.Background(), next, "status", nil, m.now)
 	if err != nil {
 		m.notice = err.Error()
 		return
@@ -280,7 +281,7 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.now = now
 		if !m.pinned && m.day != now.Format(dateLayout) {
 			next := now.Format(dateLayout)
-			if s, err := m.app.execute(next, "status", nil, now); err == nil {
+			if s, err := m.app.execute(context.Background(), next, "status", nil, now); err == nil {
 				m.day, m.data = next, s
 				m.selected, m.offset = 0, 0
 				m.scroll()

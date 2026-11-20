@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +57,10 @@ func decodeState(raw []byte) (*state, error) {
 	return s, nil
 }
 
-func (r repository) load() (*state, error) {
+func (r repository) load(ctx context.Context) (*state, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	raw, err := os.ReadFile(r.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return &state{Schema: 1, Tasks: []*task{}, Routines: map[string]routine{}}, nil
@@ -105,14 +109,20 @@ func (r repository) withLock(fn func() error) error {
 }
 
 // update holds the file lock across the complete read-modify-write operation.
-func (r repository) update(change func(*state) error) (*state, error) {
+func (r repository) update(ctx context.Context, change func(*state) error) (*state, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var result *state
 	err := r.withLock(func() error {
-		s, err := r.load()
+		s, err := r.load(ctx)
 		if err != nil {
 			return err
 		}
 		if err := change(s); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if err := r.save(s); err != nil {

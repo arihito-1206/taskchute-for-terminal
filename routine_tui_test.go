@@ -153,12 +153,12 @@ func TestRoutineDeleteStopsGenerationAndKeepsSavedWork(t *testing.T) {
 	if _, exists := m.data.Routines["removed"]; exists || !slices.Equal(m.data.Order, []string{"kept"}) {
 		t.Fatalf("routine was not removed: %v", m.data.Order)
 	}
-	saved, err := repo.load()
+	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.Tasks) != 1 || saved.Tasks[0].ID != "history" || len(saved.Tasks[0].Sessions) != 1 {
 		t.Fatalf("deletion changed the saved work: %v", err)
 	}
 	later := now.AddDate(0, 0, 2).Format(dateLayout)
-	future, err := app.execute(later, "ls", nil, now)
+	future, err := app.execute(t.Context(), later, "ls", nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}

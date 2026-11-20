@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -90,7 +91,7 @@ func (r repository) syncData(restore bool) error {
 		if _, err = os.Stat(r.path); err != nil {
 			return fmt.Errorf("cannot back up missing data: %w", err)
 		}
-		if _, err = r.load(); err != nil {
+		if _, err = r.load(context.Background()); err != nil {
 			return fmt.Errorf("cannot back up invalid data: %w", err)
 		}
 		files, err := git("log", "--format=", "--name-only", upstream+"..HEAD")

@@ -1,12 +1,15 @@
 package main
 
 import (
-	tea "charm.land/bubbletea/v2"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestTransaction(t *testing.T) {
@@ -16,7 +19,7 @@ func TestTransaction(t *testing.T) {
 	day := now.Format(dateLayout)
 	errs := make(chan error, 8)
 	for range cap(errs) {
-		go func() { _, err := app.execute(day, "add", []string{"test"}, now); errs <- err }()
+		go func() { _, err := app.execute(t.Context(), day, "add", []string{"test"}, now); errs <- err }()
 	}
 	for range cap(errs) {
 		if err := <-errs; err != nil {
@@ -27,16 +30,37 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := app.execute(day, "status", nil, now)
+	s, err := app.execute(t.Context(), day, "status", nil, now)
 	if err != nil || len(s.Tasks) != cap(errs) {
 		t.Fatal("lost update", err)
 	}
-	if _, err := app.execute(day, "delete", []string{s.Tasks[0].ID, "missing"}, now); err == nil {
+	if _, err := app.execute(t.Context(), day, "delete", []string{s.Tasks[0].ID, "missing"}, now); err == nil {
 		t.Fatal("expected invalid id")
 	}
 	after, err := os.ReadFile(repo.path)
 	if err != nil || string(after) != string(before) {
 		t.Fatal("failed command changed data", err)
+	}
+}
+
+func TestCanceledUpdateDiscardsMutations(t *testing.T) {
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if _, err := repo.update(ctx, func(s *state) error {
+		s.Tasks = append(s.Tasks, &task{ID: "not-saved"})
+		cancel()
+		return nil
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled update returned %v", err)
+	}
+	if _, err := os.Stat(repo.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("canceled update wrote a snapshot: %v", err)
+	}
+	app := application{store: repo}
+	now := time.Now()
+	if _, err := app.execute(ctx, now.Format(dateLayout), "ls", nil, now); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled read returned %v", err)
 	}
 }
 
@@ -57,7 +81,7 @@ func TestSuggestions(t *testing.T) {
 	m.app = application{store: repo}
 	m.mode = "command"
 	m.edit(tea.KeyPressMsg{Code: tea.KeyEnter})
-	saved, err := repo.load()
+	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.Tasks) != 1 {
 		t.Fatal("registration failed", err)
 	}
@@ -95,7 +119,7 @@ func TestCommandCursorEditsAndSavesMultibyteInput(t *testing.T) {
 	update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	update(tea.PasteMsg{Content: "イトル"})
 	update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	saved, err := repo.load()
+	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.Tasks) != 1 || saved.Tasks[0].Title != "長いタイトル" {
 		t.Fatalf("edited command was not saved: %+v, %v", saved, err)
 	}
@@ -152,7 +176,7 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 	now := time.Date(2026, time.November, 20, 9, 0, 0, 0, time.UTC)
 	execute := func(day, cmd string, args ...string) *state {
 		t.Helper()
-		s, err := app.execute(day, cmd, args, now)
+		s, err := app.execute(t.Context(), day, cmd, args, now)
 		if err != nil {
 			t.Fatalf("%s: %v", cmd, err)
 		}
@@ -160,7 +184,7 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 	}
 	const first, second, third = "2026-11-20", "2026-11-21", "2026-11-22"
 	taskID := execute(first, "add", "Read").Tasks[0].ID
-	if _, err := app.execute(first, "section", []string{taskID, "missing"}, now); err == nil {
+	if _, err := app.execute(t.Context(), first, "section", []string{taskID, "missing"}, now); err == nil {
 		t.Fatal("accepted an unknown section")
 	}
 	if s := execute(first, "ls"); s.Tasks[0].SectionID != "" {
@@ -187,7 +211,7 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 	if s.rows(first)[0].SectionID != "morning" || s.rows(second)[0].SectionID != "" {
 		t.Fatal("routine assignment changed an existing task")
 	}
-	saved, err := repo.load()
+	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.rows(third)) != 0 {
 		t.Fatalf("routine edit must not persist generated occurrences: %v", err)
 	}
@@ -204,7 +228,7 @@ func TestRoutineWorkCodeIsInheritedByNewTasks(t *testing.T) {
 	const first, second, third, fourth = "2026-11-20", "2026-11-21", "2026-11-22", "2026-11-23"
 	execute := func(day, cmd string, args ...string) *state {
 		t.Helper()
-		s, err := app.execute(day, cmd, args, now)
+		s, err := app.execute(t.Context(), day, cmd, args, now)
 		if err != nil {
 			t.Fatalf("%s: %v", cmd, err)
 		}
@@ -218,7 +242,7 @@ func TestRoutineWorkCodeIsInheritedByNewTasks(t *testing.T) {
 		t.Fatalf("generated task has work code %q", next.WorkCode)
 	}
 	execute(second, "rename", next.ID, "Read tomorrow")
-	if _, err := app.execute(first, "routine-code", []string{routineID, "invalid code"}, now); err == nil {
+	if _, err := app.execute(t.Context(), first, "routine-code", []string{routineID, "invalid code"}, now); err == nil {
 		t.Fatal("accepted whitespace in a routine work code")
 	}
 	execute(first, "routine-code", routineID, "PJ-043")
@@ -252,7 +276,7 @@ func TestMoveSectionUpdatesPlacementAndOrderTogether(t *testing.T) {
 	}
 	move := func(sectionID string, position ...string) *state {
 		t.Helper()
-		s, err := app.execute(day, "move-section", append([]string{"movable", sectionID}, position...), now)
+		s, err := app.execute(t.Context(), day, "move-section", append([]string{"movable", sectionID}, position...), now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -274,7 +298,7 @@ func TestMoveSectionUpdatesPlacementAndOrderTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.execute(day, "move-section", []string{"movable", "morning", "after", "afternoon-task"}, now); err == nil {
+	if _, err := app.execute(t.Context(), day, "move-section", []string{"movable", "morning", "after", "afternoon-task"}, now); err == nil {
 		t.Fatal("accepted an anchor from another section")
 	}
 	after, err := os.ReadFile(repo.path)
@@ -301,21 +325,21 @@ func TestTaskMovesRejectEndedSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"section", "move-section"} {
-		if _, err := app.execute(day, cmd, []string{"today", "am"}, noon); err == nil {
+		if _, err := app.execute(t.Context(), day, cmd, []string{"today", "am"}, noon); err == nil {
 			t.Fatalf("%s accepted a section at its end time", cmd)
 		}
 	}
-	s, err := repo.load()
+	s, err := repo.load(t.Context())
 	if err != nil || s.rows(day)[0].SectionID != "pm" {
 		t.Fatalf("blocked placement changed saved state: %v", err)
 	}
-	if _, err := app.execute(day, "move-section", []string{"today", "am"}, noon.Add(-time.Second)); err != nil {
+	if _, err := app.execute(t.Context(), day, "move-section", []string{"today", "am"}, noon.Add(-time.Second)); err != nil {
 		t.Fatalf("section before its end should accept movement: %v", err)
 	}
-	if _, err := app.execute(day, "move-section", []string{"today", "pm"}, noon); err != nil {
+	if _, err := app.execute(t.Context(), day, "move-section", []string{"today", "pm"}, noon); err != nil {
 		t.Fatalf("should be able to move out of an ended section: %v", err)
 	}
-	if _, err := app.execute(tomorrow, "section", []string{"tomorrow", "am"}, noon); err != nil {
+	if _, err := app.execute(t.Context(), tomorrow, "section", []string{"tomorrow", "am"}, noon); err != nil {
 		t.Fatalf("tomorrow's section should accept placement: %v", err)
 	}
 }
@@ -334,7 +358,7 @@ func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
 	}
 	place := func(sectionID string, position ...string) *state {
 		t.Helper()
-		s, err := app.execute(day, "routine-place", append([]string{"movable", sectionID}, position...), now)
+		s, err := app.execute(t.Context(), day, "routine-place", append([]string{"movable", sectionID}, position...), now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -357,7 +381,7 @@ func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.execute(day, "routine-place", []string{"movable", "morning", "after", "anchor"}, now); err == nil {
+	if _, err := app.execute(t.Context(), day, "routine-place", []string{"movable", "morning", "after", "anchor"}, now); err == nil {
 		t.Fatal("accepted an anchor from another section")
 	}
 	after, err := os.ReadFile(repo.path)
@@ -365,12 +389,12 @@ func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
 		t.Fatal("failed move changed saved default or order", err)
 	}
 	check(place("-", "after", "older-setting"), "", "anchor", "older-setting", "movable")
-	reordered, err := app.execute(day, "routine-place", []string{"older-setting", "-", "after", "movable"}, now)
+	reordered, err := app.execute(t.Context(), day, "routine-place", []string{"older-setting", "-", "after", "movable"}, now)
 	if err != nil || reordered.Routines["older-setting"].SectionID != "removed" {
 		t.Fatalf("reordering unassigned routines changed the saved section ID: %v", err)
 	}
 	check(place("evening"), "evening", "anchor", "movable", "older-setting")
-	saved, err := repo.load()
+	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.rows(day)) != 0 {
 		t.Fatalf("routine placement must not persist generated occurrences: %v", err)
 	}

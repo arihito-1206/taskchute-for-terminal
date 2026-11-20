@@ -99,3 +99,18 @@ func routineDate(t *testing.T, value string) time.Time {
 	}
 	return d
 }
+
+func TestFillPreservesDeletedOccurrence(t *testing.T) {
+	const day = "2026-11-20"
+	s := &state{
+		Routines: map[string]routine{"repeat": {Days: []string{"fri"}}},
+		Order:    []string{"repeat"},
+		Tasks:    []*task{{Day: day, RoutineID: "repeat", Deleted: true}},
+	}
+	s.fill(day)
+	s.fill("2026-11-27")
+	s.fill("2026-11-27")
+	if len(s.Tasks) != 2 || !s.Tasks[0].Deleted || s.Tasks[1].Day != "2026-11-27" {
+		t.Fatalf("unexpected routine occurrences: %+v", s.Tasks)
+	}
+}

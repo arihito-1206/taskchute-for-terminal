@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -43,6 +44,7 @@ func run() error {
 	}
 	repo := repository{path: config.DataPath}
 	app := application{store: repo, sections: config.Sections}
+	ctx := context.Background()
 	if flag.NArg() == 0 || flag.Arg(0) == "shell" {
 		if *machine {
 			return errors.New("--json requires a command")
@@ -50,7 +52,7 @@ func run() error {
 		if flag.NArg() > 1 {
 			return errors.New("shell takes no arguments")
 		}
-		initial, err := app.execute(*day, "status", nil, now)
+		initial, err := app.execute(ctx, *day, "status", nil, now)
 		if err != nil {
 			return err
 		}
@@ -71,7 +73,7 @@ func run() error {
 		}
 		return repo.importFile(args[0])
 	}
-	s, err := app.execute(*day, cmd, args, now)
+	s, err := app.execute(ctx, *day, cmd, args, now)
 	if err != nil {
 		return err
 	}
