@@ -4,13 +4,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
 
 func TestTransaction(t *testing.T) {
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
-	app := application{repo}
+	app := application{store: repo}
 	now := time.Now()
 	day := now.Format(dateLayout)
 	errs := make(chan error, 8)
@@ -53,7 +54,7 @@ func TestSuggestions(t *testing.T) {
 		t.Fatal(m.input)
 	}
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
-	m.app = application{repo}
+	m.app = application{store: repo}
 	m.mode = "command"
 	m.edit(tea.KeyPressMsg{Code: tea.KeyEnter})
 	saved, err := repo.load()
@@ -83,11 +84,11 @@ func TestStartDoneTaskCreatesNewRun(t *testing.T) {
 	minutes := 30.0
 	original := &task{
 		ID: "original", Day: day, Title: "Read", State: "done", Minutes: &minutes,
-		WorkCode: "PJ-042", Category: "work", RoutineID: "routine-1",
+		WorkCode: "PJ-042", Category: "work", SectionID: "morning", RoutineID: "routine-1",
 		Sessions: []session{{Start: started, End: &ended}}, Notes: []note{{Text: "finished a chapter"}},
 	}
 	s := &state{Tasks: []*task{original}}
-	if err := s.apply(day, "start", []string{original.ID}, now); err != nil {
+	if err := s.apply(day, "start", []string{original.ID}, now, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.Tasks) != 2 {
@@ -96,6 +97,7 @@ func TestStartDoneTaskCreatesNewRun(t *testing.T) {
 	restarted := s.running()
 	if restarted == nil || restarted.ID == original.ID || restarted.Title != original.Title ||
 		restarted.Day != day || restarted.WorkCode != original.WorkCode || restarted.Category != original.Category ||
+		restarted.SectionID != original.SectionID ||
 		restarted.RoutineID != original.RoutineID || restarted.Minutes == nil || *restarted.Minutes != minutes {
 		t.Fatalf("incorrect task copy: %+v", restarted)
 	}
@@ -105,5 +107,166 @@ func TestStartDoneTaskCreatesNewRun(t *testing.T) {
 	}
 	if original.State != "done" || len(original.Notes) != 1 || len(original.Sessions) != 1 || original.Sessions[0].End == nil {
 		t.Fatal("original history changed")
+	}
+}
+
+func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	app := application{store: repo, sections: []section{
+		{ID: "morning", Name: "Morning", Start: "00:00", End: "12:00"},
+		{ID: "afternoon", Name: "Afternoon", Start: "12:00", End: "24:00"},
+	}}
+	now := time.Date(2026, time.November, 20, 9, 0, 0, 0, time.UTC)
+	execute := func(day, cmd string, args ...string) *state {
+		t.Helper()
+		s, err := app.execute(day, cmd, args, now)
+		if err != nil {
+			t.Fatalf("%s: %v", cmd, err)
+		}
+		return s
+	}
+	const first, second, third = "2026-11-20", "2026-11-21", "2026-11-22"
+	taskID := execute(first, "add", "Read").Tasks[0].ID
+	if _, err := app.execute(first, "section", []string{taskID, "missing"}, now); err == nil {
+		t.Fatal("accepted an unknown section")
+	}
+	if s := execute(first, "ls"); s.Tasks[0].SectionID != "" {
+		t.Fatal("failed assignment changed the task")
+	}
+	execute(first, "section", taskID, "morning")
+	s := execute(first, "routine", taskID, "daily")
+	routineID := s.Order[0]
+	if s.Routines[routineID].SectionID != "morning" {
+		t.Fatal("new routine did not inherit the source task's section")
+	}
+	secondTask := execute(second, "ls").rows(second)[0]
+	if secondTask.SectionID != "morning" {
+		t.Fatal("new occurrence did not inherit the routine's section")
+	}
+	s = execute(second, "section", secondTask.ID, "-")
+	if s.rows(second)[0].SectionID != "" || s.Routines[routineID].SectionID != "morning" {
+		t.Fatal("daily assignment did not clear independently of routine")
+	}
+	s = execute(third, "routine-section", routineID, "afternoon")
+	if s.rows(third)[0].SectionID != "afternoon" {
+		t.Fatal("new occurrence did not inherit the changed routine section")
+	}
+	if s.rows(first)[0].SectionID != "morning" || s.rows(second)[0].SectionID != "" {
+		t.Fatal("routine assignment changed an existing task")
+	}
+	saved, err := repo.load()
+	if err != nil || len(saved.rows(third)) != 0 {
+		t.Fatalf("routine edit must not persist generated occurrences: %v", err)
+	}
+	s = execute(third, "routine-section", routineID, "-")
+	if s.Routines[routineID].SectionID != "" || s.rows(third)[0].SectionID != "" {
+		t.Fatal("clearing the routine section did not carry over to a new occurrence")
+	}
+}
+
+func TestMoveSectionUpdatesPlacementAndOrderTogether(t *testing.T) {
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	app := application{store: repo, sections: []section{
+		{ID: "morning", Name: "Morning", Start: "00:00", End: "12:00"},
+		{ID: "afternoon", Name: "Afternoon", Start: "12:00", End: "18:00"},
+		{ID: "evening", Name: "Evening", Start: "18:00", End: "24:00"},
+	}}
+	now := time.Date(2026, time.November, 20, 9, 0, 0, 0, time.UTC)
+	day := now.Format(dateLayout)
+	if err := repo.save(&state{Schema: 1, Tasks: []*task{
+		{ID: "afternoon-task", Day: day, State: "pending", SectionID: "afternoon"},
+		{ID: "movable", Day: day, State: "pending", SectionID: "morning"},
+		{ID: "older-setting", Day: day, State: "pending", SectionID: "removed"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	move := func(sectionID string, position ...string) *state {
+		t.Helper()
+		s, err := app.execute(day, "move-section", append([]string{"movable", sectionID}, position...), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	check := func(s *state, index int, sectionID string, order ...string) {
+		t.Helper()
+		rows := s.rows(day)
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		if !slices.Equal(ids, order) || rows[index].SectionID != sectionID {
+			t.Fatalf("got order %v with placement %q", ids, rows[index].SectionID)
+		}
+	}
+	check(move("afternoon", "before", "afternoon-task"), 0, "afternoon", "movable", "afternoon-task", "older-setting")
+	before, err := os.ReadFile(repo.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.execute(day, "move-section", []string{"movable", "morning", "after", "afternoon-task"}, now); err == nil {
+		t.Fatal("accepted an anchor from another section")
+	}
+	after, err := os.ReadFile(repo.path)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("failed move changed saved placement or order", err)
+	}
+	check(move("-", "after", "older-setting"), 2, "", "afternoon-task", "older-setting", "movable")
+	check(move("evening"), 2, "evening", "afternoon-task", "older-setting", "movable")
+}
+
+func TestRoutinePlaceUpdatesDefaultAndOrderTogether(t *testing.T) {
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	app := application{store: repo, sections: []section{{ID: "morning"}, {ID: "afternoon"}, {ID: "evening"}}}
+	now := time.Date(2026, time.November, 20, 9, 0, 0, 0, time.UTC)
+	day := now.Format(dateLayout)
+	if err := repo.save(&state{Schema: 1, Tasks: []*task{}, Order: []string{"movable", "anchor", "older-setting"}, Routines: map[string]routine{
+		"movable":       {ID: "movable", SectionID: "morning", FirstDay: day, Days: []string{"fri"}},
+		"anchor":        {ID: "anchor", SectionID: "afternoon", FirstDay: day, Days: []string{"fri"}},
+		"older-setting": {ID: "older-setting", SectionID: "removed", FirstDay: day, Days: []string{"fri"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	place := func(sectionID string, position ...string) *state {
+		t.Helper()
+		s, err := app.execute(day, "routine-place", append([]string{"movable", sectionID}, position...), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	check := func(s *state, sectionID string, order ...string) {
+		t.Helper()
+		if !slices.Equal(s.Order, order) || s.Routines["movable"].SectionID != sectionID {
+			t.Fatalf("got order %v with placement %q", s.Order, s.Routines["movable"].SectionID)
+		}
+		for _, task := range s.rows(day) {
+			if task.RoutineID == "movable" && task.SectionID == sectionID {
+				return
+			}
+		}
+		t.Fatal("new occurrence did not inherit routine placement")
+	}
+	check(place("afternoon", "after", "anchor"), "afternoon", "anchor", "movable", "older-setting")
+	before, err := os.ReadFile(repo.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.execute(day, "routine-place", []string{"movable", "morning", "after", "anchor"}, now); err == nil {
+		t.Fatal("accepted an anchor from another section")
+	}
+	after, err := os.ReadFile(repo.path)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("failed move changed saved default or order", err)
+	}
+	check(place("-", "after", "older-setting"), "", "anchor", "older-setting", "movable")
+	reordered, err := app.execute(day, "routine-place", []string{"older-setting", "-", "after", "movable"}, now)
+	if err != nil || reordered.Routines["older-setting"].SectionID != "removed" {
+		t.Fatalf("reordering unassigned routines changed the saved section ID: %v", err)
+	}
+	check(place("evening"), "evening", "anchor", "movable", "older-setting")
+	saved, err := repo.load()
+	if err != nil || len(saved.rows(day)) != 0 {
+		t.Fatalf("routine placement must not persist generated occurrences: %v", err)
 	}
 }

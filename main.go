@@ -16,6 +16,7 @@ rename ID TITLE | estimate ID MIN|- | category ID NAME|- | note ID TEXT
 code ID CODE|-
 set-start ID HHMM | set-end ID HHMM|- | reset ID | move ID before|after ID
 routine ID daily|mon,wed,fri [MIN] | routine-move ID up|down
+section ID SECTION|- | routine-section ID SECTION|-
 delete ID... | undo-delete | import-python PATH
 backup | restore-backup`
 
@@ -28,7 +29,7 @@ func run() error {
 		fmt.Println(commands)
 		return nil
 	}
-	path, err := resolveDataPath(*data)
+	config, err := loadSettings(*data)
 	if err != nil {
 		return err
 	}
@@ -39,8 +40,8 @@ func run() error {
 	if _, err = time.Parse(dateLayout, *day); err != nil {
 		return errors.New("invalid --day (use YYYY-MM-DD)")
 	}
-	repo := repository{path: path}
-	app := application{store: repo}
+	repo := repository{path: config.DataPath}
+	app := application{store: repo, sections: config.Sections}
 	if flag.NArg() == 0 || flag.Arg(0) == "shell" {
 		if *machine {
 			return errors.New("--json requires a command")

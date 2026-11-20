@@ -46,17 +46,19 @@ type task struct {
 	Notes     []note    `json:"notes,omitempty"`
 	WorkCode  string    `json:"work_code,omitempty"`
 	Category  string    `json:"category,omitempty"`
+	SectionID string    `json:"section_id,omitempty"`
 	RoutineID string    `json:"routine_id,omitempty"`
 	Deleted   bool      `json:"deleted,omitempty"`
 }
 
 type routine struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Category string   `json:"category,omitempty"`
-	FirstDay string   `json:"first_day"`
-	Days     []string `json:"days"`
-	Minutes  *float64 `json:"minutes"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Category  string   `json:"category,omitempty"`
+	SectionID string   `json:"section_id,omitempty"`
+	FirstDay  string   `json:"first_day"`
+	Days      []string `json:"days"`
+	Minutes   *float64 `json:"minutes"`
 }
 
 type deletion struct {
@@ -88,7 +90,7 @@ func (s *state) fill(day string) {
 		}
 		found := slices.ContainsFunc(s.Tasks, func(t *task) bool { return t.Day == day && t.RoutineID == id })
 		if !found {
-			s.Tasks = append(s.Tasks, &task{ID: occurrenceID(id, day), Day: day, RoutineID: id, Title: r.Title, Category: r.Category, Minutes: r.Minutes, State: "pending", Sessions: []session{}})
+			s.Tasks = append(s.Tasks, &task{ID: occurrenceID(id, day), Day: day, RoutineID: id, Title: r.Title, Category: r.Category, SectionID: r.SectionID, Minutes: r.Minutes, State: "pending", Sessions: []session{}})
 		}
 	}
 }
@@ -156,7 +158,7 @@ func parseTime(day, value string, now time.Time) (time.Time, error) {
 	return t, nil
 }
 
-func (s *state) apply(day, cmd string, args []string, now time.Time) error {
+func (s *state) apply(day, cmd string, args []string, now time.Time, sections []section) error {
 	rows := s.rows(day)
 	running := s.running()
 	find := func(ref string) (*task, error) {
@@ -304,6 +306,46 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 		if j >= 0 && j < len(s.Order) {
 			s.Order[i], s.Order[j] = s.Order[j], s.Order[i]
 		}
+	case "routine-section", "routine-place":
+		if len(args) != 2 && (cmd != "routine-place" || len(args) != 4) {
+			return invalid
+		}
+		r, ok := s.Routines[args[0]]
+		if !ok {
+			return errors.New("routine not found")
+		}
+		destination := args[1]
+		if destination == "-" {
+			destination = ""
+		}
+		if len(args) == 4 {
+			if args[2] != "before" && args[2] != "after" {
+				return invalid
+			}
+			anchor, ok := s.Routines[args[3]]
+			i, j := slices.Index(s.Order, args[0]), slices.Index(s.Order, args[3])
+			if !ok || i < 0 || j < 0 || i == j {
+				return errors.New("choose two different routines in the list")
+			}
+			anchorSection, _ := sectionByID(sections, anchor.SectionID)
+			if anchorSection.ID != destination {
+				return errors.New("destination routine is no longer in that section")
+			}
+			s.Order = slices.Delete(s.Order, i, i+1)
+			if i < j {
+				j--
+			}
+			if args[2] == "after" {
+				j++
+			}
+			s.Order = slices.Insert(s.Order, j, args[0])
+			sourceSection, _ := sectionByID(sections, r.SectionID)
+			if sourceSection.ID == destination {
+				return nil
+			}
+		}
+		r.SectionID = destination
+		s.Routines[args[0]] = r
 	default:
 		if len(args) == 0 {
 			return invalid
@@ -370,6 +412,15 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 			}
 			t.Minutes, err = minutes(args[0])
 			return err
+		case "section":
+			if len(args) != 1 {
+				return invalid
+			}
+			destination := args[0]
+			if destination == "-" {
+				destination = ""
+			}
+			t.SectionID = destination
 		case "reset":
 			if len(args) != 0 {
 				return invalid
@@ -430,7 +481,25 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 				return errors.New("end must be between start and now")
 			}
 			last.End = &end
-		case "move":
+		case "move", "move-section":
+			destination := t.SectionID
+			if cmd == "move-section" {
+				if len(args) != 1 && len(args) != 3 {
+					return invalid
+				}
+				if t.State != "pending" {
+					return errors.New("choose a pending task")
+				}
+				destination = args[0]
+				if destination == "-" {
+					destination = ""
+				}
+				args = args[1:]
+				if len(args) == 0 {
+					t.SectionID = destination
+					return nil
+				}
+			}
 			if len(args) != 2 || (args[0] != "before" && args[0] != "after") {
 				return invalid
 			}
@@ -441,6 +510,10 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 			if t == other || t.State != "pending" || other.State != "pending" {
 				return errors.New("choose two different pending tasks")
 			}
+			if cmd == "move-section" && taskSection(other, sections, now) != destination {
+				return errors.New("destination task is no longer in that section")
+			}
+			t.SectionID = destination
 			i := slices.Index(s.Tasks, t)
 			s.Tasks = slices.Delete(s.Tasks, i, i+1)
 			j := slices.Index(s.Tasks, other)
@@ -464,7 +537,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time) error {
 			}
 			r, exists := s.Routines[t.RoutineID]
 			if !exists {
-				r = routine{ID: identifier(), Title: t.Title, Category: t.Category, FirstDay: day, Minutes: t.Minutes}
+				r = routine{ID: identifier(), Title: t.Title, Category: t.Category, SectionID: t.SectionID, FirstDay: day, Minutes: t.Minutes}
 			}
 			r.Days = days
 			if len(args) == 2 {
