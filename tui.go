@@ -218,7 +218,7 @@ func (m terminal) room() int {
 	if m.height == 0 {
 		return 12
 	}
-	reserved := 11
+	reserved := 12
 	if m.mode == modeSearch || (m.mode == "" && m.list && m.filter != "") {
 		reserved++
 	}

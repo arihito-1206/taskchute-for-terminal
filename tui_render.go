@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
@@ -50,6 +51,61 @@ func (m terminal) View() tea.View {
 	view.Cursor = cursor
 	view.AltScreen = true
 	return view
+}
+
+// dayProgress counts the whole displayed day, including tasks outside the current filter.
+func (m terminal) dayProgress(width int) string {
+	done, total := 0, 0
+	for _, task := range m.data.Tasks {
+		if task.Day != m.day || task.Deleted {
+			continue
+		}
+		total++
+		if task.State == "done" {
+			done++
+		}
+	}
+
+	count := fmt.Sprintf("%d / %d done", done, total)
+	complete := total > 0 && done == total
+	if complete {
+		count += " ✦"
+	}
+	label := "Today"
+	if m.day != m.now.Format(dateLayout) {
+		label = "Day"
+	}
+	prefix := "  " + label + "  "
+	cells := min(10, width-ansi.StringWidth(prefix+count)-2)
+	if cells < 4 || total == 0 {
+		return ansi.Truncate(prefix+count, width, "…")
+	}
+
+	filled := done * cells / total
+	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("#55D9DC"))
+	violet := lipgloss.NewStyle().Foreground(lipgloss.Color("#B38CFF"))
+	gold := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166"))
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("#51586A"))
+	var bar strings.Builder
+	for i := range cells {
+		if i >= filled {
+			bar.WriteString(muted.Render("▱"))
+			continue
+		}
+		style := cyan
+		switch {
+		case i*5 >= cells*4:
+			style = gold
+		case i*2 >= cells:
+			style = violet
+		}
+		bar.WriteString(style.Render("▰"))
+	}
+	countStyle := lipgloss.NewStyle().Bold(true)
+	if complete {
+		countStyle = gold.Bold(true)
+	}
+	return prefix + bar.String() + "  " + countStyle.Render(count)
 }
 
 func (m terminal) render(width int) string {
@@ -100,6 +156,7 @@ func (m terminal) render(width int) string {
 			b.WriteString("  \x1b[36;1m" + runewidth.Truncate(s, max(1, width-2), "…") + "\x1b[0m\n")
 		}
 	}
+	fmt.Fprintln(&b, m.dayProgress(width))
 	if t := running; t != nil && len(t.Sessions) > 0 {
 		details := "  Started " + timeLabel(t.Sessions[0].Start, m.day, m.now.Location()) + " | Est. " + estimateLabel(t.Minutes)
 		if t.WorkCode != "" && !(m.list && m.mode == "") {

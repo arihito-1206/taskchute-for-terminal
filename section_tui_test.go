@@ -232,7 +232,7 @@ func TestGroupedSelectionFollowsUnassignedTaskOnStartAndFinish(t *testing.T) {
 }
 
 func TestGroupedListPagesThroughEmptySections(t *testing.T) {
-	m := terminal{data: &state{}, list: true, height: 17,
+	m := terminal{data: &state{}, list: true, height: 18,
 		app: application{sections: []section{
 			{ID: "a", Name: "First", Start: "06:00", End: "07:00"},
 			{ID: "b", Name: "Second", Start: "07:00", End: "08:00"},
