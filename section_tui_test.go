@@ -325,3 +325,37 @@ func TestCountedTaskFields(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchKeepsSectionAndLimitsCountedActions(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	data := &state{Schema: 1, Tasks: []*task{
+		{ID: "alpha", Day: day, Title: "Design Alpha", State: "pending", SectionID: "today"},
+		{ID: "hidden", Day: day, Title: "Hidden", State: "pending", SectionID: "today"},
+		{ID: "beta", Day: day, Title: "Beta", WorkCode: "DESIGN", State: "pending", SectionID: "today"},
+		{ID: "outside", Day: day, Title: "Design Outside", State: "pending"},
+	}}
+	if err := repo.save(data); err != nil {
+		t.Fatal(err)
+	}
+	m := terminal{app: application{store: repo, sections: []section{
+		{ID: "today", Start: "00:00", End: "24:00"},
+	}}, data: data, now: now, day: day, width: 100}
+	m = sectionPress(m, 'L', '/', 'd', 'e', 's', 'i', 'g', 'n')
+	if len(m.visibleRows()) != 2 || m.View().Cursor == nil {
+		t.Fatal("search did not filter by title and code within the section")
+	}
+	m = sectionPress(m, tea.KeyEnter, '/', 'x', tea.KeyEsc)
+	if m.mode != "" || m.filter != "design" || len(m.visibleRows()) != 2 {
+		t.Fatal("cancel did not restore the applied filter")
+	}
+	m = sectionPress(m, '2', 'd', 'd')
+	if !m.data.Tasks[0].Deleted || !m.data.Tasks[2].Deleted || m.data.Tasks[1].Deleted || m.data.Tasks[3].Deleted {
+		t.Fatal("counted delete did not use the filtered rows")
+	}
+	m = sectionPress(m, tea.KeyEsc)
+	if !m.list || m.sectionID != "today" || m.filter != "" || len(m.visibleRows()) != 1 {
+		t.Fatal("clearing the filter should keep the section list open")
+	}
+}

@@ -52,6 +52,7 @@ type terminal struct {
 	selected, offset, routineIndex, width, height, count int
 	mode, input, notice, noteID, noteDay                 string
 	commandReturn                                        string
+	filter                                               string
 	routineDeleteID                                      string
 	note                                                 noteEditor
 }
@@ -137,8 +138,26 @@ func (m terminal) visibleRows() []*task {
 	return m.taskList().rows
 }
 
+func (m terminal) taskFilter() string {
+	if m.mode == "search" {
+		return strings.TrimSpace(m.input)
+	}
+	return m.filter
+}
+
 func (m terminal) taskList() taskList {
+	return m.taskListFor(m.taskFilter())
+}
+
+func (m terminal) taskListFor(query string) taskList {
 	rows := m.data.rows(m.day)
+	if query != "" {
+		query = strings.ToLower(query)
+		rows = slices.DeleteFunc(rows, func(t *task) bool {
+			return !strings.Contains(strings.ToLower(t.Title), query) &&
+				!strings.Contains(strings.ToLower(t.WorkCode), query)
+		})
+	}
 	sections := m.app.sections
 	if len(sections) == 0 {
 		return taskList{rows: rows}
@@ -152,9 +171,13 @@ func (m terminal) taskList() taskList {
 		}
 		return taskList{rows: visible}
 	}
-	return groupSections(rows, sections, func(t *task) string {
+	list := groupSections(rows, sections, func(t *task) string {
 		return taskSection(t, sections, m.now)
 	})
+	if query != "" {
+		list.groups = slices.DeleteFunc(list.groups, func(g sectionGroup) bool { return g.start == g.end })
+	}
+	return list
 }
 
 func (m *terminal) showList(sectionID string, target *task) {
@@ -188,6 +211,9 @@ func (m terminal) room() int {
 		return 12
 	}
 	reserved := 11
+	if m.mode == "search" || (m.mode == "" && m.list && m.filter != "") {
+		reserved++
+	}
 	if m.sectionID != "" && m.mode != "routines" {
 		reserved += sectionHeaderHeight
 	}
@@ -234,13 +260,18 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == "note" {
 			return m.updateNote(msg)
 		}
-		if m.mode == "command" {
+		if m.mode == "command" || m.mode == "search" {
+			before := m.input
 			m.insertCommandText(strings.Map(func(r rune) rune {
 				if unicode.IsControl(r) {
 					return ' '
 				}
 				return r
 			}, event.Content))
+			if m.mode == "search" && m.input != before {
+				m.selected, m.offset = 0, 0
+				m.scroll()
+			}
 			m.suggestion = 0
 		}
 	case tea.KeyPressMsg:
@@ -256,6 +287,8 @@ func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.mode == "command" {
 			m.edit(event)
+		} else if m.mode == "search" {
+			m.editSearch(event)
 		} else if m.mode == "routines" {
 			m.routineKey(event.String())
 		} else if m.mode == "section-picker" {
@@ -344,12 +377,15 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 		}
 		parts := strings.Fields(input)
 		cmd, args := parts[0], parts[1:]
-		if cmd == "start" && len(args) == 0 && len(m.app.sections) > 0 {
+		if cmd == "start" && len(args) == 0 && (len(m.app.sections) > 0 || m.filter != "") {
 			next := firstPending(m.visibleRows())
 			if next != nil {
 				args = []string{next.ID}
-			} else if m.sectionID != "" {
+			} else if m.filter != "" || m.sectionID != "" {
 				m.notice = "No pending task in this section."
+				if m.filter != "" {
+					m.notice = "No pending task matches the filter."
+				}
 				return
 			}
 		}
@@ -372,7 +408,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 				m.showList("", m.target())
 			}
 			if cmd == "status" {
-				m.list, m.sectionID = false, ""
+				m.list, m.sectionID, m.filter = false, "", ""
 			}
 			m.mode = ""
 			if cmd == "help" {
@@ -407,8 +443,32 @@ func (m *terminal) insertCommandText(value string) {
 	m.inputCursor += len(value)
 }
 
+func (m *terminal) editSearch(key tea.KeyPressMsg) {
+	switch key.String() {
+	case "enter":
+		m.filter = m.taskFilter()
+		m.mode, m.input, m.inputCursor = "", "", 0
+	case "esc":
+		m.mode, m.input, m.inputCursor = "", "", 0
+		m.selected, m.offset = 0, 0
+	default:
+		before := m.input
+		m.edit(key)
+		if before != m.input {
+			m.selected, m.offset = 0, 0
+		}
+	}
+}
+
+func (m terminal) inputPrompt() string {
+	if m.mode == "search" {
+		return "  / "
+	}
+	return "  : "
+}
+
 func (m terminal) commandLine(width int) (string, int) {
-	const prompt = "  : "
+	prompt := m.inputPrompt()
 	room := max(0, width-len(prompt))
 	before := terminalText(m.input[:m.inputCursor], false)
 	after := terminalText(m.input[m.inputCursor:], false)
@@ -662,8 +722,16 @@ func (m *terminal) normalKey(key string) bool {
 	switch key {
 	case "q":
 		return true
+	case "/":
+		m.mode, m.list, m.input, m.notice = "search", true, m.filter, ""
+		m.inputCursor = len(m.input)
 	case "esc":
 		m.notice = ""
+		if m.filter != "" {
+			m.filter = ""
+			m.showList(m.sectionID, target)
+			break
+		}
 		if m.sectionID != "" {
 			m.list, m.sectionID = false, ""
 		}
@@ -671,11 +739,11 @@ func (m *terminal) normalKey(key string) bool {
 		if !m.list || m.sectionID != "" {
 			m.showList("", target)
 		} else {
-			m.list = false
+			m.list, m.filter = false, ""
 		}
 	case "L":
 		if m.sectionID != "" {
-			m.list, m.sectionID, m.notice = false, "", ""
+			m.list, m.sectionID, m.notice, m.filter = false, "", "", ""
 			break
 		}
 		s, ok := sectionAt(m.app.sections, m.now)
@@ -713,6 +781,9 @@ func (m *terminal) normalKey(key string) bool {
 		m.list = true
 		m.selected = len(rows) - 1
 	case "J", "K":
+		if m.filter != "" {
+			list = m.taskListFor("")
+		}
 		m.moveTask(list, target, key)
 	case "s", "enter":
 		if target == nil {
@@ -813,10 +884,10 @@ func (m terminal) View() tea.View {
 		return view
 	}
 	raw := m.render(width)
-	if m.mode == "command" {
+	if m.mode == "command" || m.mode == "search" {
 		_, x := m.commandLine(width)
 		for y, line := range strings.Split(raw, "\n") {
-			if strings.HasPrefix(ansi.Strip(line), "  : ") {
+			if strings.HasPrefix(ansi.Strip(line), m.inputPrompt()) {
 				cursor = tea.NewCursor(x, y)
 				cursor.Shape = tea.CursorBar
 				break
@@ -912,15 +983,44 @@ func (m terminal) render(width int) string {
 	default:
 		line("  s start/finish | n note | l list | L section | t timeline | a add | ? help | q quit")
 		if m.list {
+			query := m.taskFilter()
+			capacity := sectionCapacity
+			if query != "" {
+				full := m.taskListFor("")
+				capacity = func(s section, _ []*task) string {
+					if m.sectionID != "" {
+						return sectionCapacity(s, full.rows)
+					}
+					for _, group := range full.groups {
+						if group.section.ID == s.ID {
+							return sectionCapacity(s, full.rows[group.start:group.end])
+						}
+					}
+					return ""
+				}
+			}
 			if s, ok := sectionByID(m.app.sections, m.sectionID); ok {
-				for _, text := range sectionHeaderLines(s, sectionCapacity(s, rows), width) {
+				for _, text := range sectionHeaderLines(s, capacity(s, rows), width) {
 					line(text)
 				}
 			}
 			titleWidth := max(8, min(60, width-56))
 			line(fmt.Sprintf("  %-7s  %-*s     EST  %-11s  %-11s  ELAPSED", "STATE", titleWidth, "TASK", "START", "END"))
-			if m.sectionID != "" && len(rows) == 0 {
-				line("  No tasks in this section.")
+			if m.mode == "search" {
+				input, _ := m.commandLine(width)
+				if hint := fmt.Sprintf("  %d matches | Enter apply · Esc cancel", len(rows)); ansi.StringWidth(input)+ansi.StringWidth(hint) <= width {
+					input += hint
+				}
+				fmt.Fprintln(&b, input)
+			} else if query != "" {
+				line(fmt.Sprintf("  %d matches | / edit · Esc clear | Filter: %s", len(rows), query))
+			}
+			if len(rows) == 0 {
+				if query != "" {
+					line("  No matching tasks.")
+				} else if m.sectionID != "" {
+					line("  No tasks in this section.")
+				}
 			}
 			list.draw(m.offset, m.room(), width, line, func(i int, task *task) {
 				codeLabel := ""
@@ -964,8 +1064,8 @@ func (m terminal) render(width int) string {
 						line("           └ " + strings.Join(details, " │ "))
 					}
 				}
-			}, sectionCapacity)
-			line("  j/k select | J/K move | b section | [count]dd delete | U undo")
+			}, capacity)
+			line("  j/k select | J/K move | b section | / filter | [count]dd delete | U undo")
 		}
 	}
 	if m.notice != "" {
@@ -1057,7 +1157,7 @@ func (m terminal) renderNote(width int) (string, *tea.Cursor) {
 
 // addSuggestions preserves the optional estimate while completing only the title.
 func (m terminal) addSuggestions() (string, []string) {
-	if m.fieldEdit != nil || m.endEdit.task != nil {
+	if m.mode == "search" || m.fieldEdit != nil || m.endEdit.task != nil {
 		return "", nil
 	}
 	body, ok := strings.CutPrefix(m.input, "add ")

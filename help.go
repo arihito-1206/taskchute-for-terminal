@@ -55,7 +55,7 @@ var helpLines = func() []string {
 		"TASKS",
 		"  s / Enter   Start or finish", "              On Done, start a copy", "  a           Add a task", "  n           Open task notes",
 		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task across rows or sections", "  g / G       First / last task",
-		"  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
+		"  /           Filter tasks by title or work code", "              Enter applies, Esc cancels or clears", "  dd / 3dd    Delete one / three tasks", "  U           Undo latest deletion",
 		"  L           Toggle current section (Esc to close)", "  b           Choose a section for the task or routine",
 		"  v then J/K  Reorder routines or move them across sections",
 		"  v then c    Set the default work code for a routine",
