@@ -52,8 +52,18 @@ func TestSectionListPinsAndDeletesVisibleTasks(t *testing.T) {
 	}
 	m = sectionPress(m, 'p')
 	next, _ := m.Update(clockMsg(now.Add(90 * time.Minute)))
-	m = sectionPress(next.(terminal), 'L')
-	if m.sectionID != "morning" || m.notice != "No section at the current time." {
+	m = next.(terminal)
+	for _, key := range []rune{'L', tea.KeyEsc} {
+		closed := sectionPress(m, key)
+		if closed.list || closed.sectionID != "" {
+			t.Fatalf("key %q did not close the section list", key)
+		}
+		reopened := sectionPress(closed, 'L')
+		if reopened.list || reopened.notice != "No section at the current time." {
+			t.Fatal("opened a section during a gap")
+		}
+	}
+	if m.sectionID != "morning" {
 		t.Fatalf("section changed during a gap: %q, %q", m.sectionID, m.notice)
 	}
 	if got := m.render(100); !strings.Contains(got, "Free 03:00:00 | 2 unestimated") {

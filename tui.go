@@ -605,6 +605,9 @@ func (m *terminal) normalKey(key string) bool {
 		return true
 	case "esc":
 		m.notice = ""
+		if m.sectionID != "" {
+			m.list, m.sectionID = false, ""
+		}
 	case "l":
 		if !m.list || m.sectionID != "" {
 			m.showList("", target)
@@ -612,6 +615,10 @@ func (m *terminal) normalKey(key string) bool {
 			m.list = false
 		}
 	case "L":
+		if m.sectionID != "" {
+			m.list, m.sectionID, m.notice = false, "", ""
+			break
+		}
 		s, ok := sectionAt(m.app.sections, m.now)
 		if !ok {
 			m.notice = "No section at the current time."
