@@ -142,7 +142,7 @@ func sectionHeaderLines(s section, capacity string, width int) []string {
 	width = max(1, width)
 	label := "  " + terminalText(s.Name, false)
 	if s.ID != "" {
-		label += "  " + s.Start + " → " + s.End
+		label += "  " + s.Start + " – " + s.End
 	}
 	if capacity != "" {
 		suffix := "  │  " + capacity

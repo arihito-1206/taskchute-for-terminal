@@ -456,7 +456,7 @@ func (m terminal) sectionPickerView(width int) string {
 		label := "Unassigned"
 		if i > 0 {
 			s := m.app.sections[i-1]
-			label = s.Name + "  " + s.Start + " → " + s.End
+			label = s.Name + "  " + s.Start + " – " + s.End
 			if m.picker.command == "section" && sectionEnded(s, m.picker.day, m.now) {
 				label += " (ended)"
 			}

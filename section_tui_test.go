@@ -41,7 +41,7 @@ func TestSectionListPinsAndDeletesVisibleTasks(t *testing.T) {
 	}}
 	m := terminal{app: app, data: s, now: now, day: day}
 	m = sectionPress(m, 'L')
-	if got := m.render(100); !strings.Contains(got, "Morning  09:00 → 12:00") ||
+	if got := m.render(100); !strings.Contains(got, "Morning  09:00 – 12:00") ||
 		!strings.Contains(got, "Free 03:00:00 | 2 unestimated") ||
 		strings.Contains(got, "First afternoon task") {
 		t.Fatalf("incorrect section view:\n%s", got)
@@ -65,7 +65,7 @@ func TestSectionListPinsAndDeletesVisibleTasks(t *testing.T) {
 		t.Fatalf("counted delete did not use filtered rows: %+v", m.visibleRows())
 	}
 	rule := strings.Repeat("─", 100)
-	if got := m.render(100); !strings.Contains(got, rule+"\n  Afternoon  13:00 → 18:00  │  Free 05:00:00 | 1 unestimated\n"+rule) {
+	if got := m.render(100); !strings.Contains(got, rule+"\n  Afternoon  13:00 – 18:00  │  Free 05:00:00 | 1 unestimated\n"+rule) {
 		t.Fatalf("full list omitted task placement:\n%s", got)
 	}
 	next, _ = m.Update(clockMsg(now.Add(2 * time.Hour)))
@@ -176,7 +176,7 @@ func TestTaskKeysBlockMovingIntoEndedSection(t *testing.T) {
 		t.Fatalf("K changed placement or skipped the notice: %q", m.notice)
 	}
 	m = sectionPress(m, 'b', 'k')
-	if !strings.Contains(m.render(80), "Morning  00:00 → 12:00 (ended)") {
+	if !strings.Contains(m.render(80), "Morning  00:00 – 12:00 (ended)") {
 		t.Fatal("picker omitted the ended label")
 	}
 	m = sectionPress(m, tea.KeyEnter)
