@@ -208,6 +208,11 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 		t.Fatal("failed assignment changed the task")
 	}
 	execute(first, "section", taskID, "morning")
+	if _, err := app.execute(t.Context(), first, "routine", []string{taskID, "daily"}, now); err == nil {
+		t.Fatal("created a routine from an unstarted task")
+	}
+	execute(first, "start", taskID)
+	execute(first, "done")
 	s := execute(first, "routine", taskID, "daily")
 	routineID := s.Order[0]
 	if s.Routines[routineID].SectionID != "morning" {
@@ -253,6 +258,8 @@ func TestRoutineWorkCodeIsInheritedByNewTasks(t *testing.T) {
 	}
 	id := execute(first, "add", "Read").Tasks[0].ID
 	execute(first, "code", id, "PJ-042")
+	execute(first, "start", id)
+	execute(first, "done")
 	routineID := execute(first, "routine", id, "daily").Order[0]
 	next := execute(second, "ls").rows(second)[0]
 	if next.WorkCode != "PJ-042" {

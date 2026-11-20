@@ -852,6 +852,12 @@ func (m *terminal) normalKey(key string) bool {
 			m.notice = "No task selected."
 			break
 		}
+		if key == "R" {
+			if _, exists := m.data.Routines[target.RoutineID]; !exists && !target.hasCompletedLog() {
+				m.notice = "Select a completed task with recorded time to create a routine."
+				break
+			}
+		}
 		m.openCommand(prefix)
 		if key == "c" {
 			m.notice = "💼 work / 仕事   🏠 home / 家事   🎨 hobby / 趣味   ☕ rest / 休憩 | - clears"
@@ -971,6 +977,17 @@ func (m terminal) render(width int) string {
 			}
 		} else {
 			line("  " + commandUsage(m.input))
+			words := strings.Fields(m.input)
+			if len(words) >= 2 && words[1] == "@" && words[0] != "add" && words[0] != "routine-code" {
+				if target := m.targetIn(list); target != nil {
+					line("  @ " + title(target))
+					if len(target.Sessions) > 0 {
+						line(fmt.Sprintf("    %s | Actual %s | Est. %s", target.Day, duration(elapsed(target, m.now)), estimateLabel(target.Minutes)))
+					}
+				} else {
+					line("  @ No task selected.")
+				}
+			}
 		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)

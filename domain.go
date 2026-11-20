@@ -55,6 +55,12 @@ func (t *task) legacyPaused() bool {
 	return t.State == "pending" && len(t.Sessions) > 0
 }
 
+func (t *task) hasCompletedLog() bool {
+	return t.State == "done" && slices.ContainsFunc(t.Sessions, func(interval session) bool {
+		return !interval.Start.IsZero() && interval.End != nil && !interval.End.Before(interval.Start)
+	})
+}
+
 type routine struct {
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
@@ -647,6 +653,9 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 		}
 		r, exists := s.Routines[t.RoutineID]
 		if !exists {
+			if !t.hasCompletedLog() {
+				return errors.New("create a routine from a completed task with recorded time")
+			}
 			r = routine{ID: identifier(), Title: t.Title, WorkCode: t.WorkCode, Category: t.Category, SectionID: t.SectionID, FirstDay: t.Day, Minutes: t.Minutes}
 		}
 		if err := r.setRepeat(args[0]); err != nil {

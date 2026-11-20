@@ -114,16 +114,21 @@ func TestRoutineRepeatCanBeSetFromTaskList(t *testing.T) {
 	now := time.Date(2026, 11, 20, 9, 0, 0, 0, time.Local)
 	day := now.Format(dateLayout)
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
-	s := &state{Schema: 1, Tasks: []*task{{ID: "task", Day: day, Title: "Read", State: "pending"}}}
+	s := &state{Schema: 1, Tasks: []*task{
+		{ID: "task", Day: day, Title: "Read", State: "done", Sessions: []session{{Start: now.Add(-20 * time.Minute), End: &now}}},
+	}}
 	if err := repo.save(s); err != nil {
 		t.Fatal(err)
 	}
-	m := terminal{app: application{store: repo}, data: s, day: day, now: now}
+	m := terminal{app: application{store: repo}, data: s, day: day, now: now, list: true}
 	m = sectionPress(m, 'R')
-	m = sectionPress(m, []rune("monthly:2:tue 15")...)
+	if view := m.render(100); !strings.Contains(view, "@ Read") || !strings.Contains(view, "Actual 00:20:00") {
+		t.Fatalf("command view omitted the selected task or actual time:\n%s", view)
+	}
+	m = sectionPress(m, []rune("weekly:1:tue 30")...)
 	m = sectionPress(m, tea.KeyEnter, 'v')
 	view := m.render(100)
-	if !strings.Contains(view, "monthly:2:tue") || !strings.Contains(view, "15m") {
+	if !strings.Contains(view, "tue") || !strings.Contains(view, "30m") {
 		t.Fatalf("routine view omitted the repeat rule or estimate:\n%s", view)
 	}
 }
