@@ -57,8 +57,13 @@ type terminal struct {
 	note                     noteEditor
 }
 
+// clock fires just after each whole second, the finest unit the screen shows.
 func clock() tea.Cmd {
-	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg { return clockMsg(t) })
+	return tea.Tick(untilNextSecond(time.Now()), func(t time.Time) tea.Msg { return clockMsg(t) })
+}
+
+func untilNextSecond(now time.Time) time.Duration {
+	return time.Second - time.Duration(now.Nanosecond()) + 10*time.Millisecond
 }
 
 type splashDone struct{}

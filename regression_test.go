@@ -163,3 +163,13 @@ func TestDoneRowsOrderIsConsistentWithoutEndTimes(t *testing.T) {
 		t.Fatalf("order = %v", got)
 	}
 }
+
+func TestClockWakesOncePerSecond(t *testing.T) {
+	for _, nano := range []int{0, 1, 500_000_000, 999_999_999} {
+		now := time.Date(2026, 11, 20, 10, 0, 7, nano, time.Local)
+		wait := untilNextSecond(now)
+		if wait <= 0 || wait > time.Second+10*time.Millisecond || now.Add(wait).Second() != 8 && nano != 0 {
+			t.Errorf("nanosecond %d waits %v", nano, wait)
+		}
+	}
+}
