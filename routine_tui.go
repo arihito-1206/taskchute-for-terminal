@@ -115,6 +115,19 @@ func (m terminal) routineTarget(list routineList) string {
 
 func (m *terminal) routineKey(key string) {
 	list := m.routineList()
+	if id := m.routineDeleteID; id != "" {
+		m.routineDeleteID, m.notice = "", ""
+		if key == "d" {
+			if m.execute("routine-delete", id) {
+				m.notice = "Routine deleted."
+				m.scrollRoutines()
+			}
+			return
+		}
+		if key == "esc" {
+			return
+		}
+	}
 	switch key {
 	case "esc", "v", "q":
 		m.mode, m.notice = "", ""
@@ -141,6 +154,12 @@ func (m *terminal) routineKey(key string) {
 	case "c":
 		if id := m.routineTarget(list); id != "" {
 			m.openCommand("routine-code " + id + " " + m.data.Routines[id].WorkCode)
+		}
+		return
+	case "d":
+		if id := m.routineTarget(list); id != "" {
+			m.routineDeleteID = id
+			m.notice = "Press d again to delete the routine | Esc cancels"
 		}
 		return
 	case "J", "K":
@@ -193,7 +212,7 @@ func (m *terminal) moveRoutine(list routineList, key string) {
 }
 
 func (m terminal) drawRoutines(line func(string), width int) {
-	line("  ROUTINES | j/k select | J/K move | b section | c code | Esc back")
+	line("  ROUTINES | j/k select | J/K move | b section | c code | dd delete | Esc back")
 	list := m.routineList()
 	repeatWidth := min(27, max(7, width/3))
 	nameWidth := max(8, width-repeatWidth-14)

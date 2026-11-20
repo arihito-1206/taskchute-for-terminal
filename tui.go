@@ -67,6 +67,7 @@ type terminal struct {
 	selected, offset, routineIndex, width, height, count int
 	mode, input, notice, noteID, noteDay                 string
 	commandReturn                                        string
+	routineDeleteID                                      string
 	note                                                 noteEditor
 }
 

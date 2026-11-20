@@ -48,7 +48,7 @@ func (a application) execute(day, cmd string, args []string, now time.Time) (*st
 	}
 	s, err := a.store.update(func(s *state) error {
 		switch cmd {
-		case "routine-move", "routine-section", "routine-place", "routine-code":
+		case "routine-move", "routine-section", "routine-place", "routine-code", "routine-delete":
 		default:
 			s.fill(day)
 		}

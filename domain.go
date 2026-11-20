@@ -322,6 +322,18 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if j >= 0 && j < len(s.Order) {
 			s.Order[i], s.Order[j] = s.Order[j], s.Order[i]
 		}
+	case "routine-delete":
+		if len(args) != 1 {
+			return invalid
+		}
+		id := args[0]
+		if _, ok := s.Routines[id]; !ok {
+			return errors.New("routine not found")
+		}
+		delete(s.Routines, id)
+		if i := slices.Index(s.Order, id); i >= 0 {
+			s.Order = slices.Delete(s.Order, i, i+1)
+		}
 	case "routine-code":
 		if len(args) != 2 {
 			return invalid

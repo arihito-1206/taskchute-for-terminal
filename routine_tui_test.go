@@ -127,3 +127,42 @@ func TestRoutineRepeatCanBeSetFromTaskList(t *testing.T) {
 		t.Fatalf("routine view omitted the repeat rule or estimate:\n%s", view)
 	}
 }
+
+func TestRoutineDeleteStopsGenerationAndKeepsSavedWork(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
+	end := now.Add(-time.Minute)
+	s := &state{Schema: 1, Order: []string{"removed", "kept"}, Routines: map[string]routine{
+		"removed": {ID: "removed", Title: "Archive", Repeat: "daily/2", FirstDay: day},
+		"kept":    {ID: "kept", Title: "Keep", Days: repeatWeek, FirstDay: day},
+	}, Tasks: []*task{
+		{ID: "history", Day: day, Title: "Archive", State: "done", RoutineID: "removed",
+			Sessions: []session{{Start: end.Add(-time.Minute), End: &end}}},
+	}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	app := application{store: repo}
+	m := terminal{app: app, data: s, day: day, now: now}
+	m = sectionPress(m, 'v', 'd', tea.KeyEsc)
+	if m.mode != "routines" || len(m.data.Routines) != 2 {
+		t.Fatal("cancel changed the routine list")
+	}
+	m = sectionPress(m, 'd', 'd')
+	if _, exists := m.data.Routines["removed"]; exists || !slices.Equal(m.data.Order, []string{"kept"}) {
+		t.Fatalf("routine was not removed: %v", m.data.Order)
+	}
+	saved, err := repo.load()
+	if err != nil || len(saved.Tasks) != 1 || saved.Tasks[0].ID != "history" || len(saved.Tasks[0].Sessions) != 1 {
+		t.Fatalf("deletion changed the saved work: %v", err)
+	}
+	later := now.AddDate(0, 0, 2).Format(dateLayout)
+	future, err := app.execute(later, "ls", nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows := future.rows(later); len(rows) != 1 || rows[0].RoutineID != "kept" {
+		t.Fatalf("unexpected routines generated after deletion: %v", rows)
+	}
+}
