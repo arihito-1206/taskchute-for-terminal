@@ -505,7 +505,7 @@ func (m terminal) sectionPickerView(width int) string {
 		label := "Unassigned"
 		if i > 0 {
 			s := m.app.sections[i-1]
-			label = s.Name + "  " + s.Start + "–" + s.End
+			label = s.Name + "  " + s.Start + " → " + s.End
 			if m.picker.command == "section" && sectionEnded(s, m.picker.day, m.now) {
 				label += " (ended)"
 			}
@@ -885,7 +885,7 @@ func (m terminal) render(width int) string {
 						line(prefix + text)
 					}
 					if i == m.selected && task.WorkCode != "" {
-						line("           ┗ Code " + task.WorkCode)
+						line("           └ Code " + task.WorkCode)
 					}
 				}
 			}
@@ -920,7 +920,7 @@ func sectionHeaderLines(s section, capacity string, width int) []string {
 	width = max(1, width)
 	label := "  " + terminalText(s.Name, false)
 	if s.ID != "" {
-		label += "  " + s.Start + "–" + s.End
+		label += "  " + s.Start + " → " + s.End
 	}
 	if capacity != "" {
 		suffix := "  │  " + capacity

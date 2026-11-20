@@ -39,8 +39,8 @@ func TestRoutineSectionsMoveAndKeepSelection(t *testing.T) {
 		len(list.groups) != 4 || list.groups[1].start != list.groups[1].end {
 		t.Fatalf("incorrect routine groups: %+v", list)
 	}
-	if view := m.render(100); !strings.Contains(view, "Morning  09:00–12:00") ||
-		!strings.Contains(view, "Lunch  12:00–13:00") || !strings.Contains(view, "> First morning routine") {
+	if view := m.render(100); !strings.Contains(view, "Morning  09:00 → 12:00") ||
+		!strings.Contains(view, "Lunch  12:00 → 13:00") || !strings.Contains(view, "> First morning routine") {
 		t.Fatalf("routine view omitted section headings or the selected row:\n%s", view)
 	}
 	assertSelection := func(id, section string, order ...string) {
@@ -80,7 +80,7 @@ func TestRoutineViewportPagesThroughEmptyGroups(t *testing.T) {
 	for range m.routineList().lineCount() {
 		m = sectionPress(m, tea.KeyPgDown)
 	}
-	if view := m.render(80); !strings.Contains(view, "Unassigned") || strings.Contains(view, "First  06:00–07:00") {
+	if view := m.render(80); !strings.Contains(view, "Unassigned") || strings.Contains(view, "First  06:00 → 07:00") {
 		t.Fatalf("could not page to empty Unassigned heading:\n%s", view)
 	}
 }
