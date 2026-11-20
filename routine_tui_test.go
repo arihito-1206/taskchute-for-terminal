@@ -35,7 +35,7 @@ func TestRoutineSectionsMoveAndKeepSelection(t *testing.T) {
 	}}
 	m := terminal{app: app, data: s, now: now, day: now.Format(dateLayout)}
 	m = sectionPress(m, 'v')
-	if list := m.routineList(); !slices.Equal(list.ids, []string{"a", "b", "c", "z", "d"}) ||
+	if list := m.routineList(); !slices.Equal(list.rows, []string{"a", "b", "c", "z", "d"}) ||
 		len(list.groups) != 4 || list.groups[1].start != list.groups[1].end {
 		t.Fatalf("incorrect routine groups: %+v", list)
 	}
@@ -47,9 +47,9 @@ func TestRoutineSectionsMoveAndKeepSelection(t *testing.T) {
 		t.Helper()
 		list := m.routineList()
 		if m.routineTarget(list) != id || m.data.Routines[id].SectionID != section ||
-			!slices.Equal(list.ids, order) {
+			!slices.Equal(list.rows, order) {
 			t.Fatalf("selected %q in %q with order %v, want %q in %q with %v",
-				m.routineTarget(list), m.data.Routines[id].SectionID, list.ids, id, section, order)
+				m.routineTarget(list), m.data.Routines[id].SectionID, list.rows, id, section, order)
 		}
 	}
 	m = sectionPress(m, 'J')

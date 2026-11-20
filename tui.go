@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,39 +17,12 @@ import (
 
 type clockMsg time.Time
 
-const sectionHeaderHeight = 3
-
 type sectionPicker struct {
 	command, id, day string
 	index            int
 }
 
-type taskGroup struct {
-	section    section
-	start, end int
-}
-
-type taskList struct {
-	rows   []*task
-	groups []taskGroup
-}
-
-func (l taskList) groupOf(index int) int {
-	for i, g := range l.groups {
-		if index < g.end {
-			return i
-		}
-	}
-	return -1
-}
-
-func (l taskList) taskLine(index int) int {
-	return index + (l.groupOf(index)+1)*sectionHeaderHeight
-}
-
-func (l taskList) lineCount() int {
-	return len(l.rows) + len(l.groups)*sectionHeaderHeight
-}
+type taskList = sectionList[*task]
 
 type terminal struct {
 	timelineOffset                                       int
@@ -134,11 +106,7 @@ func (m terminal) targetIn(list taskList) *task {
 		}
 		return firstPending(list.rows)
 	}
-	if m.selected < 0 || m.selected >= len(list.rows) {
-		return nil
-	}
-	selectedLine := list.taskLine(m.selected)
-	if selectedLine < m.offset || selectedLine >= m.offset+m.room() {
+	if !list.visible(m.selected, m.offset, m.room()) {
 		return nil
 	}
 	return list.rows[m.selected]
@@ -172,23 +140,9 @@ func (m terminal) taskList() taskList {
 		}
 		return taskList{rows: visible}
 	}
-	bySection := make(map[string][]*task, len(sections)+1)
-	for _, t := range rows {
-		id := taskSection(t, sections, m.now)
-		bySection[id] = append(bySection[id], t)
-	}
-	list := taskList{rows: rows[:0], groups: make([]taskGroup, 0, len(sections)+1)}
-	for _, s := range sections {
-		list.appendGroup(s, bySection[s.ID])
-	}
-	list.appendGroup(section{Name: "Unassigned"}, bySection[""])
-	return list
-}
-
-func (l *taskList) appendGroup(s section, members []*task) {
-	start := len(l.rows)
-	l.rows = append(l.rows, members...)
-	l.groups = append(l.groups, taskGroup{section: s, start: start, end: len(l.rows)})
+	return groupSections(rows, sections, func(t *task) string {
+		return taskSection(t, sections, m.now)
+	})
 }
 
 func (m *terminal) showList(sectionID string, target *task) {
@@ -210,37 +164,11 @@ func taskIndex(rows []*task, id string) int {
 }
 
 func (m *terminal) scroll() {
-	list := m.taskList()
-	m.selected = max(0, min(m.selected, len(list.rows)-1))
-	room := m.room()
-	m.offset = min(m.offset, max(0, list.lineCount()-room))
-	if len(list.rows) == 0 {
-		return
-	}
-	selectionLine := list.taskLine(m.selected)
-	if selectionLine < m.offset {
-		m.offset = selectionLine
-	}
-	if selectionLine >= m.offset+room {
-		m.offset = selectionLine - room + 1
-	}
-	if group := list.groupOf(m.selected); group >= 0 && m.selected == list.groups[group].start {
-		m.offset = min(m.offset, selectionLine-min(sectionHeaderHeight, room-1))
-	}
+	m.selected, m.offset = m.taskList().reveal(m.selected, m.offset, m.room())
 }
 
 func (m *terminal) pageList(list taskList, step int) {
-	room := m.room()
-	jump := step * max(1, room/2)
-	m.offset = max(0, min(m.offset+jump, list.lineCount()-room))
-	lastLine := m.offset + room - 1
-	wanted := max(m.offset, min(list.taskLine(m.selected)+jump, lastLine))
-	i := sort.Search(len(list.rows), func(i int) bool { return list.taskLine(i) >= wanted })
-	if i < len(list.rows) && list.taskLine(i) <= lastLine {
-		m.selected = i
-	} else if i > 0 && list.taskLine(i-1) >= m.offset {
-		m.selected = i - 1
-	}
+	m.selected, m.offset = list.page(m.selected, m.offset, m.room(), step)
 }
 
 func (m terminal) room() int {
@@ -867,52 +795,30 @@ func (m terminal) render(width int) string {
 			if m.sectionID != "" && len(rows) == 0 {
 				line("  No tasks in this section.")
 			}
-			end := m.offset + m.room()
-			drawRows := func(start, stop, headers int) {
-				for i := max(start, m.offset-headers); i < min(stop, end-headers); i++ {
-					task := rows[i]
-					codeLabel := ""
-					if task.WorkCode != "" {
-						codeLabel = "🔖"
-					}
-					text := row(task, m.day, m.now, titleWidth, codeLabel)
-					prefix := "  "
-					if i == m.selected {
-						prefix = "> "
-					}
-					switch {
-					case m.sectionID != "" && rows[i].State == "running":
-						fmt.Fprintln(&b, runningBand(prefix+text, min(width, 90)))
-					case m.sectionID != "" && i == m.selected:
-						fmt.Fprintln(&b, "\x1b[38;5;252;48;5;237m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
-					case rows[i].State == "running":
-						fmt.Fprintln(&b, "\x1b[1;36m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
-					default:
-						line(prefix + text)
-					}
-					if i == m.selected && task.WorkCode != "" {
-						line("           └ Code " + task.WorkCode)
-					}
+			list.draw(m.offset, m.room(), width, line, func(i int, task *task) {
+				codeLabel := ""
+				if task.WorkCode != "" {
+					codeLabel = "🔖"
 				}
-			}
-			if len(list.groups) == 0 {
-				drawRows(0, len(rows), 0)
-			}
-			for i, g := range list.groups {
-				heading := g.start + i*sectionHeaderHeight
-				if heading < end && heading+sectionHeaderHeight > m.offset {
-					capacity := ""
-					if g.section.ID != "" {
-						capacity = sectionCapacity(g.section, rows[g.start:g.end])
-					}
-					for j, text := range sectionHeaderLines(g.section, capacity, width) {
-						if heading+j >= m.offset && heading+j < end {
-							line(text)
-						}
-					}
+				text := row(task, m.day, m.now, titleWidth, codeLabel)
+				prefix := "  "
+				if i == m.selected {
+					prefix = "> "
 				}
-				drawRows(g.start, g.end, (i+1)*sectionHeaderHeight)
-			}
+				switch {
+				case m.sectionID != "" && task.State == "running":
+					fmt.Fprintln(&b, runningBand(prefix+text, min(width, 90)))
+				case m.sectionID != "" && i == m.selected:
+					fmt.Fprintln(&b, "\x1b[38;5;252;48;5;237m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
+				case task.State == "running":
+					fmt.Fprintln(&b, "\x1b[1;36m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
+				default:
+					line(prefix + text)
+				}
+				if i == m.selected && task.WorkCode != "" {
+					line("           └ Code " + task.WorkCode)
+				}
+			}, sectionCapacity)
 			line("  j/k select | J/K move | b section | [count]dd delete | U undo")
 		}
 	}
@@ -920,24 +826,6 @@ func (m terminal) render(width int) string {
 		line("  " + m.notice)
 	}
 	return strings.TrimRight(b.String(), "\n")
-}
-
-func sectionHeaderLines(s section, capacity string, width int) []string {
-	width = max(1, width)
-	label := "  " + terminalText(s.Name, false)
-	if s.ID != "" {
-		label += "  " + s.Start + " → " + s.End
-	}
-	if capacity != "" {
-		suffix := "  │  " + capacity
-		if room := width - runewidth.StringWidth(suffix); room >= 8 {
-			label = runewidth.Truncate(label, room, "…") + suffix
-		} else {
-			label = "  " + capacity
-		}
-	}
-	rule := strings.Repeat("─", width)
-	return []string{rule, label, rule}
 }
 
 func runningBand(text string, width int) string {
