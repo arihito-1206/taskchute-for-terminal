@@ -24,7 +24,7 @@ var commandGuides = []commandGuide{
 	{"set-end @ HHMM|- [INTERVAL]", "Edit an interval end (1-based, default last) / - resumes the last"},
 	{"reset @", "Clear recorded times and return to Pending."},
 	{"move @ before|after ID", "Reorder a pending task."},
-	{"routine @ REPEAT [MIN]", "daily/2 | weekday | holiday | mon/2 | monthly:1 | monthly:2:tue"},
+	{"routine @ REPEAT [MIN]", "daily/2 | weekday | holiday | weekly:1:tue | mon/2 | monthly:1 | monthly:2:tue"},
 	{"routine-move ID up|down", "Change the routine order."},
 	{"routine-delete ID", "Stop generating tasks from the routine and keep saved tasks."},
 	{"section @ SECTION|-", "Assign a task to a section / - clears."},

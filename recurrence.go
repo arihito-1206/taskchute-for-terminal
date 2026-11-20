@@ -21,9 +21,17 @@ type repeatRule struct {
 
 func parseRepeat(value string) (repeatRule, error) {
 	invalid := func() (repeatRule, error) {
-		return repeatRule{}, fmt.Errorf("invalid repeat %q: use daily, weekday, holiday, mon,wed, monthly:1 or monthly:2:tue with optional /N", value)
+		return repeatRule{}, fmt.Errorf("invalid repeat %q: use daily, weekday, holiday, mon,wed, weekly:1:tue, monthly:1 or monthly:2:tue with optional /N", value)
 	}
 	pattern, interval, hasInterval := strings.Cut(strings.ToLower(value), "/")
+	if weekly, ok := strings.CutPrefix(pattern, "weekly:"); ok {
+		count, weekday, found := strings.Cut(weekly, ":")
+		n := repeatNumber(count)
+		if hasInterval || !found || !slices.Contains(repeatWeek, weekday) || n < 1 {
+			return invalid()
+		}
+		return repeatRule{interval: n, days: []string{weekday}}, nil
+	}
 	rule := repeatRule{interval: 1}
 	if hasInterval {
 		rule.interval = repeatNumber(interval)

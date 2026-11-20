@@ -50,6 +50,7 @@ go build -o tc .
 | `weekday` | 毎週月〜金 |
 | `holiday` | 毎週土日 |
 | `mon,wed,fri` | 毎週月・水・金 |
+| `weekly:1:tue` | 毎週火曜（`tue` と同じ） |
 | `mon,wed/2` | 2 週ごとの月・水 |
 | `monthly:1` | 毎月 1 日 |
 | `monthly:2:tue` | 毎月第 2 火曜 |
