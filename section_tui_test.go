@@ -50,7 +50,10 @@ func TestSectionListPinsAndDeletesVisibleTasks(t *testing.T) {
 	if running := m.data.running(); running == nil || running.ID != "morning-1" {
 		t.Fatalf("start did not use the first pending task in the section: %+v", running)
 	}
-	m = sectionPress(m, 'u')
+	if !m.execute("reset", "morning-1") {
+		t.Fatalf("could not reset the task after verifying start: %s", m.notice)
+	}
+	m.selectTask("morning-1")
 	next, _ := m.Update(clockMsg(now.Add(90 * time.Minute)))
 	m = next.(terminal)
 	for _, key := range []rune{'L', tea.KeyEsc} {

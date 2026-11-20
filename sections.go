@@ -76,7 +76,7 @@ func sectionEnded(s section, day string, now time.Time) bool {
 
 func checkSectionPlacement(t *task, destination string, sections []section, now time.Time) error {
 	current := taskSection(t, sections, now)
-	if t.State == "done" && t.SectionID != "" {
+	if (t.State == "running" || t.State == "done") && t.SectionID != "" {
 		current = t.SectionID
 	}
 	if destination != current {
@@ -88,7 +88,7 @@ func checkSectionPlacement(t *task, destination string, sections []section, now 
 }
 
 func taskSection(t *task, sections []section, now time.Time) string {
-	if t.State == "done" || (t.State == "running" && t.SectionID == "") {
+	if t.State == "running" || t.State == "done" {
 		var first time.Time
 		for _, interval := range t.Sessions {
 			if !interval.Start.IsZero() && (first.IsZero() || interval.Start.Before(first)) {

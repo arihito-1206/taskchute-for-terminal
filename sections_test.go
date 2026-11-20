@@ -108,10 +108,13 @@ func TestTaskSectionUsesPlacementOrFirstActualStart(t *testing.T) {
 	if got := taskSection(&work, sections, now); got != "am" {
 		t.Fatalf("unassigned running task: got %q", got)
 	}
-	work.SectionID = "pm"
+	work.SectionID = "am"
+	work.Sessions = []session{{Start: now.Add(-time.Hour).UTC()}}
 	if got := taskSection(&work, sections, now); got != "pm" {
-		t.Fatalf("assigned task: got %q", got)
+		t.Fatalf("task planned for morning and started at 14:00: got %q", got)
 	}
+	work.SectionID = "pm"
+	work.Sessions = []session{{Start: first}, {Start: now}}
 	work.State = "done"
 	if got := taskSection(&work, sections, now); got != "am" {
 		t.Fatalf("completed task with a different planned section: got %q", got)
