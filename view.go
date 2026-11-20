@@ -35,22 +35,28 @@ func terminalText(value string, multiline bool) string {
 }
 
 func title(t *task) string {
-	icon := map[string]string{
-		"work": "💼", "仕事": "💼",
-		"home": "🏠", "家事": "🏠",
-		"hobby": "🎨", "趣味": "🎨",
-		"study": "📚", "学習": "📚",
-		"rest": "☕", "休憩": "☕",
-		"meal": "🍖", "食事": "🍖",
-		"family": "👪", "家族": "👪", "育児": "👪",
-	}[strings.ToLower(t.Category)]
-	if t.Category != "" && icon == "" {
+	return categoryTitle(t.Title, t.Category)
+}
+
+var categoryIcons = map[string]string{
+	"work": "💼", "仕事": "💼",
+	"home": "🏠", "家事": "🏠",
+	"hobby": "🎨", "趣味": "🎨",
+	"study": "📚", "学習": "📚",
+	"rest": "☕", "休憩": "☕",
+	"meal": "🍖", "食事": "🍖",
+	"family": "👪", "家族": "👪", "育児": "👪",
+}
+
+func categoryTitle(name, category string) string {
+	icon := categoryIcons[strings.ToLower(category)]
+	if category != "" && icon == "" {
 		icon = "🏷"
 	}
 	if icon != "" {
-		return icon + " " + terminalText(t.Title, false)
+		return icon + " " + terminalText(name, false)
 	}
-	return terminalText(t.Title, false)
+	return terminalText(name, false)
 }
 
 func dateWithWeekday(day string) string {

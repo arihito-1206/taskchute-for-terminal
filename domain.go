@@ -371,6 +371,18 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 	return nil
 }
 
+func parseCategory(args []string) (string, error) {
+	value := strings.TrimSpace(strings.Join(args, " "))
+	switch value {
+	case "":
+		return "", errInvalidCommand
+	case "-":
+		return "", nil
+	default:
+		return value, nil
+	}
+}
+
 func isRoutineCommand(cmd string) bool {
 	switch cmd {
 	case "routine-move", "routine-delete", "routine-code", "routine-category", "routine-section", "routine-place":
@@ -417,12 +429,9 @@ func (s *state) applyRoutineCommand(cmd string, args []string, sections []sectio
 		if !ok {
 			return errors.New("routine not found")
 		}
-		category := strings.TrimSpace(strings.Join(args[1:], " "))
-		if category == "" {
-			return errInvalidCommand
-		}
-		if category == "-" {
-			category = ""
+		category, err := parseCategory(args[1:])
+		if err != nil {
+			return err
 		}
 		r.Category = category
 		s.Routines[args[0]] = r
@@ -510,7 +519,13 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 			return errors.New("comment cannot be empty")
 		}
 		entry.Text = args[3]
-	case "rename", "category", "note":
+	case "category":
+		category, err := parseCategory(args)
+		if err != nil {
+			return err
+		}
+		t.Category = category
+	case "rename", "note":
 		value := strings.TrimSpace(strings.Join(args, " "))
 		if value == "" {
 			return errInvalidCommand
@@ -518,11 +533,6 @@ func (s *state) applyTaskCommand(t *task, rows []*task, cmd string, args []strin
 		switch cmd {
 		case "rename":
 			t.Title = value
-		case "category":
-			if value == "-" {
-				value = ""
-			}
-			t.Category = value
 		case "note":
 			t.Notes = append(t.Notes, note{Text: value, At: now})
 		}

@@ -165,7 +165,7 @@ func (m terminal) drawRoutines(line func(string), width int) {
 		if i == m.routineIndex {
 			arrow = "> "
 		}
-		name := runewidth.FillRight(runewidth.Truncate(title(&task{Title: r.Title, Category: r.Category}), nameWidth, "…"), nameWidth)
+		name := runewidth.FillRight(runewidth.Truncate(categoryTitle(r.Title, r.Category), nameWidth, "…"), nameWidth)
 		repeats := runewidth.FillRight(runewidth.Truncate(repeat, repeatWidth, "…"), repeatWidth)
 		line(fmt.Sprintf("%s%s  %s %6s", arrow, name, repeats, estimateLabel(r.Minutes)))
 	}, nil)
