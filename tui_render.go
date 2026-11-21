@@ -151,7 +151,7 @@ func (m terminal) render(width int) string {
 		if i == 1 && strings.Contains(s, " | Day ends ") {
 			next, finish, _ := strings.Cut(s, " | Day ends ")
 			next = runewidth.Truncate(strings.TrimPrefix(next, "Next "), max(0, width-runewidth.StringWidth(finish)-20), "...")
-			b.WriteString("  \x1b[2mNext\x1b[0m \x1b[35m" + next + "\x1b[0m | \x1b[1mDay ends " + finish + "\x1b[0m\n")
+			b.WriteString("  \x1b[2mNext " + next + "\x1b[0m | \x1b[1;35mDay ends " + finish + "\x1b[0m\n")
 		} else {
 			b.WriteString("  \x1b[36;1m" + runewidth.Truncate(s, max(1, width-2), "…") + "\x1b[0m\n")
 		}
