@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -9,6 +11,7 @@ import (
 type sectionPicker struct {
 	command, id, day string
 	index            int
+	taskIDs          []string
 }
 
 type endTimeEdit struct {
@@ -84,12 +87,27 @@ func (m *terminal) sectionPickerKey(key string) {
 	case "G":
 		m.picker.index = len(m.app.sections)
 		return
-	case "enter":
+	case "enter", ".":
 		id := "-"
 		if m.picker.index > 0 {
 			id = m.app.sections[m.picker.index-1].ID
 		}
-		if !m.executeDay(m.picker.day, m.picker.command, m.picker.id, id) {
+		if key == "." {
+			if len(m.picker.taskIDs) == 0 {
+				return
+			}
+			current, ok := sectionAt(m.app.sections, time.Now())
+			if !ok {
+				m.notice = "No current section."
+				return
+			}
+			id = current.ID
+		}
+		args := []string{m.picker.id, id}
+		if len(m.picker.taskIDs) > 0 {
+			args = append([]string{id}, m.picker.taskIDs...)
+		}
+		if !m.executeDay(m.picker.day, m.picker.command, args...) {
 			return
 		}
 	case "esc":
@@ -106,7 +124,12 @@ func (m *terminal) sectionPickerKey(key string) {
 }
 
 func (m terminal) sectionPickerView(width int) string {
-	lines := []string{"SECTION"}
+	heading, footer := "SECTION", "j/k select | Enter save | Esc cancel"
+	if count := len(m.picker.taskIDs); count > 0 {
+		heading = fmt.Sprintf("MOVE %d TASK(S) TO SECTION", count)
+		footer = "j/k select | Enter move | . current | Esc cancel"
+	}
+	lines := []string{heading}
 	visible := max(1, m.helpRows()-2)
 	first := max(0, m.picker.index-visible+1)
 	for i := first; i < min(len(m.app.sections)+1, first+visible); i++ {
@@ -114,7 +137,7 @@ func (m terminal) sectionPickerView(width int) string {
 		if i > 0 {
 			s := m.app.sections[i-1]
 			label = s.Name + "  " + s.Start + " – " + s.End
-			if m.picker.command == "section" && sectionEnded(s, m.picker.day, m.now) {
+			if len(m.picker.taskIDs) > 0 && sectionEnded(s, m.picker.day, m.now) {
 				label += " (ended)"
 			}
 		}
@@ -127,7 +150,7 @@ func (m terminal) sectionPickerView(width int) string {
 	if m.notice != "" {
 		lines = append(lines, m.notice)
 	}
-	lines = append(lines, "j/k select | Enter save | Esc cancel")
+	lines = append(lines, footer)
 	for i, line := range lines {
 		lines[i] = runewidth.Truncate(terminalText(line, false), width, "…")
 	}

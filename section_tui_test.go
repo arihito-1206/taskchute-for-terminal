@@ -374,3 +374,35 @@ func TestSearchKeepsSectionAndLimitsCountedActions(t *testing.T) {
 		t.Fatal("clearing the filter should keep the section list open")
 	}
 }
+
+func TestCountedSectionMoveToCurrentSection(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	s := &state{Schema: 1, Tasks: []*task{
+		{ID: "a", Day: day, State: "pending"},
+		{ID: "b", Day: day, State: "pending"},
+		{ID: "c", Day: day, State: "pending"},
+		{ID: "existing", Day: day, State: "pending", SectionID: "current"},
+	}}
+	if err := repo.save(s); err != nil {
+		t.Fatal(err)
+	}
+	app := application{store: repo, sections: []section{{ID: "current", Start: "00:00", End: "24:00"}}}
+	m := terminal{app: app, data: s, now: now, day: day, list: true, selected: 1}
+	m = sectionPress(m, '4', 'b')
+	if m.mode == modeSectionPicker {
+		t.Fatal("accepted a count larger than the source group")
+	}
+	m = sectionPress(m, '3', 'b', '.')
+	var ids []string
+	for _, task := range m.data.rows(day) {
+		if task.SectionID != "current" {
+			t.Fatalf("task %s did not move", task.ID)
+		}
+		ids = append(ids, task.ID)
+	}
+	if m.mode == modeSectionPicker || !slices.Equal(ids, []string{"existing", "a", "b", "c"}) {
+		t.Fatalf("unexpected result: mode %q, order %v", m.mode, ids)
+	}
+}

@@ -117,8 +117,8 @@ func (m *terminal) normalKey(key string) bool {
 				return false
 			}
 		} else if digit, err := strconv.Atoi(key); err == nil && len(key) == 1 {
-			m.count = min(max(1, len(rows)), m.count*10+digit)
-			m.notice = fmt.Sprintf("%d | dd delete · c category · C code", m.count)
+			m.count = min(len(rows)+1, m.count*10+digit)
+			m.notice = fmt.Sprintf("%d | dd delete · c category · C code · b section", m.count)
 			return false
 		} else if key == "d" && target != nil {
 			m.deleting = true
@@ -143,7 +143,7 @@ func (m *terminal) normalKey(key string) bool {
 			m.openCommand("")
 			m.fieldEdit = edit
 			return false
-		} else if m.count != 0 {
+		} else if m.count != 0 && key != "b" {
 			m.count, m.notice = 0, ""
 		}
 	}
@@ -245,11 +245,33 @@ func (m *terminal) normalKey(key string) bool {
 			m.execute("reset", target.ID)
 		}
 	case "b":
+		count := max(1, m.count)
+		m.count = 0
 		if target == nil {
 			m.notice = "No task selected."
 			break
 		}
-		m.openSectionPicker("section", target.ID, target.Day, target.SectionID)
+		selected := []*task{target}
+		if m.list {
+			if count > len(rows)-m.selected || list.groupOf(m.selected) != list.groupOf(m.selected+count-1) {
+				m.notice = "Not enough tasks in this section."
+				break
+			}
+			selected = rows[m.selected : m.selected+count]
+		}
+		ids := make([]string, 0, count)
+		for _, task := range selected {
+			if task.State != "pending" {
+				break
+			}
+			ids = append(ids, task.ID)
+		}
+		if len(ids) != count {
+			m.notice = "Select consecutive pending tasks."
+			break
+		}
+		m.openSectionPicker("batch-section", target.ID, target.Day, target.SectionID)
+		m.picker.taskIDs = ids
 	case "v":
 		m.mode = modeRoutines
 		m.routineIndex, m.routineOffset = 0, 0

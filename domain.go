@@ -226,6 +226,40 @@ func findTask(rows []*task, ref string) (*task, error) {
 
 func (s *state) apply(day, cmd string, args []string, now time.Time, sections []section) error {
 	switch cmd {
+	case "batch-section":
+		if len(args) < 2 {
+			return errInvalidCommand
+		}
+		destination := args[0]
+		if destination == "-" {
+			destination = ""
+		} else {
+			section, ok := sectionByID(sections, destination)
+			if !ok {
+				return fmt.Errorf("unknown section %q", destination)
+			}
+			if sectionEnded(section, day, now) {
+				return fmt.Errorf("section %q has already ended", section.Name)
+			}
+		}
+		rows := s.rows(day)
+		moving := make([]*task, 0, len(args)-1)
+		selected := make(map[*task]bool, len(args)-1)
+		for _, id := range args[1:] {
+			t, err := findTask(rows, id)
+			if err != nil {
+				return err
+			}
+			if t.State != "pending" || selected[t] {
+				return errors.New("choose distinct pending tasks")
+			}
+			selected[t] = true
+			moving = append(moving, t)
+		}
+		for _, t := range moving {
+			t.SectionID = destination
+		}
+		s.Tasks = append(slices.DeleteFunc(s.Tasks, func(t *task) bool { return selected[t] }), moving...)
 	case "batch-code", "batch-category":
 		if len(args) < 2 {
 			return errInvalidCommand
