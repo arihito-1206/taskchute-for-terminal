@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (m *terminal) moveTask(list taskList, target *task, key string) {
@@ -31,8 +32,20 @@ func (m *terminal) moveTask(list taskList, target *task, key string) {
 			return
 		}
 	}
+	if !m.list || groupIndex < 0 {
+		return
+	}
+	now := time.Now()
 	next := groupIndex + step
-	if !m.list || groupIndex < 0 || next < 0 || next >= len(list.groups) {
+	for next >= 0 && next < len(list.groups) {
+		candidate := list.groups[next].section
+		if candidate.ID == "" || !sectionEnded(candidate, target.Day, now) {
+			break
+		}
+		next += step
+	}
+	if next < 0 || next >= len(list.groups) {
+		m.notice = "No section available in that direction (earlier sections have already ended)."
 		return
 	}
 	destination := list.groups[next]
