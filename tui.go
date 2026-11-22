@@ -92,7 +92,17 @@ func (m *terminal) executeDay(day, cmd string, args ...string) bool {
 		s.fill(m.day)
 	}
 	m.data = s
-	if selected != nil {
+	if cmd == "interrupt" {
+		running := s.running()
+		m.day, m.pinned = running.Day, false
+		if m.list {
+			if taskIndex(m.visibleRows(), running.ID) < 0 {
+				m.filter, m.sectionID = "", ""
+			}
+			m.selectTask(running.ID)
+			m.scroll()
+		}
+	} else if selected != nil {
 		m.selectTask(selected.ID)
 	}
 	m.notice = "Saved"

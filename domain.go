@@ -338,6 +338,11 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		t.State = "running"
 		t.Sessions = append(t.Sessions, session{Start: now})
+	case "interrupt":
+		if len(args) != 0 {
+			return errInvalidCommand
+		}
+		return s.interrupt(now)
 	case "done":
 		if len(args) != 0 {
 			return errInvalidCommand
@@ -402,6 +407,29 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		args = args[1:]
 		return s.applyTaskCommand(t, rows, cmd, args, now, sections)
 	}
+	return nil
+}
+
+func (s *state) interrupt(now time.Time) error {
+	current := s.running()
+	if current == nil || len(current.Sessions) == 0 {
+		return errors.New("no task is running")
+	}
+	last := &current.Sessions[len(current.Sessions)-1]
+	if now.Before(last.Start) {
+		return errors.New("interruption cannot precede the start")
+	}
+	day := now.Format(dateLayout)
+	rest := *current
+	rest.ID, rest.Day, rest.State = identifier(), day, "pending"
+	rest.Sessions, rest.Notes = []session{}, nil
+	if current.Minutes != nil {
+		left := max(0, *current.Minutes-elapsed(current, now).Minutes())
+		rest.Minutes = &left
+	}
+	last.End, current.State = &now, "done"
+	s.Tasks = slices.Insert(s.Tasks, 0, &rest)
+	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, State: "running", Sessions: []session{{Start: now}}})
 	return nil
 }
 

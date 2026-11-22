@@ -82,7 +82,7 @@ func (m terminal) addSuggestions() []inputSuggestion {
 	seen := map[string]bool{}
 	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
 		t := m.data.Tasks[i]
-		if t.Deleted || t.Day > m.day || !hasPrefixFold(t.Title, query) {
+		if t.Title == "" || t.Deleted || t.Day > m.day || !hasPrefixFold(t.Title, query) {
 			continue
 		}
 		name := strings.ToLower(t.Title)

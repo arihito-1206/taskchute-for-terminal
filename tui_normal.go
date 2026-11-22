@@ -220,6 +220,8 @@ func (m *terminal) normalKey(key string) bool {
 			list = m.taskListFor(m.data.rows(m.day), "", m.planning)
 		}
 		m.moveTask(list, target, key)
+	case "I":
+		m.execute("interrupt")
 	case "s", "enter":
 		if target == nil {
 			m.notice = "No task selected."

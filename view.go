@@ -58,6 +58,9 @@ var categoryIcons = map[string]string{
 }
 
 func categoryTitle(name, category string) string {
+	if name == "" {
+		name = "(untitled)"
+	}
 	icon := categoryIcons[strings.ToLower(category)]
 	if category != "" && icon == "" {
 		icon = "🏷"

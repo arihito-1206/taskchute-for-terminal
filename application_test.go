@@ -509,3 +509,25 @@ func TestEditOvernightTaskTimes(t *testing.T) {
 		t.Fatalf("expected the same interval to resume: %+v", task)
 	}
 }
+
+func TestInterruptRemainingWork(t *testing.T) {
+	now := time.Now()
+	day := now.Format(dateLayout)
+	minutes := 30.0
+	original := &task{ID: "work", Title: "Code", Day: day, State: "running", Minutes: &minutes, WorkCode: "abc", Notes: []note{{Text: "history"}}, Sessions: []session{{Start: now.Add(-12 * time.Minute)}}}
+	s := state{Tasks: []*task{{ID: "later", Day: day, State: "pending"}, original}}
+	if err := s.apply(day, "interrupt", nil, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	rest := firstPending(s.rows(day))
+	if original.State != "done" || !original.Sessions[0].End.Equal(now) || rest.WorkCode != "abc" || rest.Title != "Code" || *rest.Minutes != 18 || len(rest.Sessions)+len(rest.Notes) != 0 {
+		t.Fatal("incorrect remaining work")
+	}
+	running := s.running()
+	if running == nil || running.Title != "" || title(running) != "(untitled)" || !running.Sessions[0].Start.Equal(now) {
+		t.Fatal("missing untitled task")
+	}
+	if err := s.apply(day, "rename", []string{running.ID, "Call"}, now, nil); err != nil || running.Title != "Call" {
+		t.Fatal("rename failed", err)
+	}
+}
