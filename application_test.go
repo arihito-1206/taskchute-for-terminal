@@ -204,7 +204,7 @@ func TestRoutineSectionDefaultsAndDailyAssignments(t *testing.T) {
 	if _, err := app.execute(t.Context(), first, "section", []string{taskID, "missing"}, now); err == nil {
 		t.Fatal("accepted an unknown section")
 	}
-	if s := execute(first, "ls"); s.Tasks[0].SectionID != "" {
+	if s := execute(first, "ls"); s.Tasks[0].SectionID != "morning" {
 		t.Fatal("failed assignment changed the task")
 	}
 	execute(first, "section", taskID, "morning")
@@ -529,5 +529,34 @@ func TestInterruptRemainingWork(t *testing.T) {
 	}
 	if err := s.apply(day, "rename", []string{running.ID, "Call"}, now, nil); err != nil || running.Title != "Call" {
 		t.Fatal("rename failed", err)
+	}
+}
+
+func TestAddAndInterruptUseCurrentSection(t *testing.T) {
+	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
+	day := now.Format(dateLayout)
+	sections := []section{{ID: "am", Start: "09:00", End: "12:00"}, {ID: "pm", Start: "12:00", End: "16:00"}}
+	s := state{}
+	for _, tc := range []struct {
+		day  string
+		at   time.Time
+		want string
+	}{
+		{day, now, "pm"}, {"2026-11-23", now, ""}, {day, now.Add(5 * time.Hour), ""},
+	} {
+		if err := s.apply(tc.day, "add", []string{"Task"}, tc.at, sections); err != nil {
+			t.Fatal(err)
+		}
+		if got := s.Tasks[len(s.Tasks)-1].SectionID; got != tc.want {
+			t.Fatalf("add: got %q want %q", got, tc.want)
+		}
+	}
+	source := &task{ID: "work", Day: day, SectionID: "am", State: "running", Sessions: []session{{Start: now.Add(-time.Hour)}}}
+	s.Tasks = append(s.Tasks, source)
+	if err := s.apply(day, "interrupt", nil, now, sections); err != nil {
+		t.Fatal(err)
+	}
+	if source.SectionID != "am" || s.running().SectionID != "pm" || firstPending(s.rows(day)).SectionID != "pm" || s.Tasks[0].SectionID != "pm" {
+		t.Fatal("incorrect placement across section boundary")
 	}
 }

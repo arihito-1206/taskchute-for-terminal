@@ -295,7 +295,12 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if title == "" {
 			return errInvalidCommand
 		}
-		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}})
+		sectionID := ""
+		if day == now.Format(dateLayout) {
+			current, _ := sectionAt(sections, now)
+			sectionID = current.ID
+		}
+		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: sectionID, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}})
 	case "start":
 		if day > now.Format(dateLayout) {
 			return errors.New("cannot start a task scheduled for a future day")
@@ -342,7 +347,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if len(args) != 0 {
 			return errInvalidCommand
 		}
-		return s.interrupt(now)
+		return s.interrupt(now, sections)
 	case "done":
 		if len(args) != 0 {
 			return errInvalidCommand
@@ -410,7 +415,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 	return nil
 }
 
-func (s *state) interrupt(now time.Time) error {
+func (s *state) interrupt(now time.Time, sections []section) error {
 	current := s.running()
 	if current == nil || len(current.Sessions) == 0 {
 		return errors.New("no task is running")
@@ -420,7 +425,11 @@ func (s *state) interrupt(now time.Time) error {
 		return errors.New("interruption cannot precede the start")
 	}
 	day := now.Format(dateLayout)
+	slot, inSection := sectionAt(sections, now)
 	rest := *current
+	if inSection {
+		rest.SectionID = slot.ID
+	}
 	rest.ID, rest.Day, rest.State = identifier(), day, "pending"
 	rest.Sessions, rest.Notes = []session{}, nil
 	if current.Minutes != nil {
@@ -429,7 +438,7 @@ func (s *state) interrupt(now time.Time) error {
 	}
 	last.End, current.State = &now, "done"
 	s.Tasks = slices.Insert(s.Tasks, 0, &rest)
-	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, State: "running", Sessions: []session{{Start: now}}})
+	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: slot.ID, State: "running", Sessions: []session{{Start: now}}})
 	return nil
 }
 
