@@ -71,7 +71,7 @@ func untilNextSecond(now time.Time) time.Duration {
 type splashDone struct{}
 
 func (m terminal) Init() tea.Cmd {
-	return tea.Batch(m.startupSync, clock(), tea.Tick(time.Second, func(time.Time) tea.Msg { return splashDone{} }))
+	return tea.Batch(m.startupSync, clock(), tea.Tick(800*time.Millisecond, func(time.Time) tea.Msg { return splashDone{} }))
 }
 
 func (m *terminal) execute(cmd string, args ...string) bool {
