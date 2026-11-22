@@ -258,8 +258,8 @@ func (m terminal) render(width int) string {
 		if m.list {
 			query := m.taskFilter()
 			capacity := sectionCapacity
-			if query != "" {
-				full := m.taskListFor("")
+			if query != "" || m.planning {
+				full := m.taskListFor("", false)
 				capacity = func(s section, _ []*task) string {
 					if m.sectionID != "" {
 						return sectionCapacity(s, full.rows)

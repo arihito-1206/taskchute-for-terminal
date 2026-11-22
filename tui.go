@@ -156,12 +156,12 @@ func (m terminal) taskFilter() string {
 }
 
 func (m terminal) taskList() taskList {
-	return m.taskListFor(m.taskFilter())
+	return m.taskListFor(m.taskFilter(), m.planning)
 }
 
-func (m terminal) taskListFor(query string) taskList {
+func (m terminal) taskListFor(query string, remainingOnly bool) taskList {
 	rows := m.data.rows(m.day)
-	if m.planning {
+	if remainingOnly {
 		rows = slices.DeleteFunc(rows, func(t *task) bool { return t.State == "done" })
 		if len(rows) == 0 {
 			return taskList{}

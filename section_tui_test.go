@@ -426,6 +426,10 @@ func TestPlanFinishAndAdd(t *testing.T) {
 	if !m.planning || m.target() == nil || m.target().Title != "New" {
 		t.Fatal("new task was not selected in Plan", m.notice)
 	}
+	viaLS := sectionPress(m, ':', 'l', 's', tea.KeyEnter)
+	if viaLS.planning || viaLS.target() == nil || viaLS.target().ID != m.target().ID {
+		t.Fatal("ls changed the selected task when revealing completed rows")
+	}
 	m = sectionPress(m, tea.KeyEsc)
 	if m.planning || !m.list || len(m.visibleRows()) != 2 {
 		t.Fatal("expected full list")

@@ -106,30 +106,22 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			}
 		}
 		switch cmd {
-		case "plan", "ls", "status", "help", "routines":
-			if cmd == "plan" {
-				target := m.target()
-				m.planning, m.filter = true, ""
-				m.showList("", target)
-			}
-			if cmd == "ls" || cmd == "status" {
-				m.planning = false
-			}
-			if cmd == "ls" {
-				m.showList("", m.target())
-			}
-			if cmd == "status" {
-				m.list, m.sectionID, m.filter = false, "", ""
+		case "plan", "ls":
+			target := m.target()
+			m.planning = cmd == "plan"
+			if m.planning {
+				m.filter = ""
 			}
 			m.mode = ""
-			if cmd == "help" {
-				m.mode, m.helpOffset = modeHelp, 0
-			}
-			if cmd == "routines" {
-				m.mode = modeRoutines
-				m.routineIndex, m.routineOffset = 0, 0
-				m.scrollRoutines()
-			}
+			m.showList("", target)
+		case "status":
+			m.mode, m.planning, m.list, m.sectionID, m.filter = "", false, false, "", ""
+		case "help":
+			m.mode, m.helpOffset = modeHelp, 0
+		case "routines":
+			m.mode = modeRoutines
+			m.routineIndex, m.routineOffset = 0, 0
+			m.scrollRoutines()
 		default:
 			if !m.execute(cmd, args...) {
 				return
