@@ -74,6 +74,7 @@ type routine struct {
 }
 
 type deletion struct {
+	Cut bool     `json:"cut,omitempty"`
 	Day string   `json:"day"`
 	IDs []string `json:"ids"`
 }
@@ -113,7 +114,14 @@ func (s *state) fill(day string) {
 	}
 	// Deleted occurrences still count so fill does not recreate them.
 	existing := make(map[string]bool, len(s.Order))
+	occurrences := make(map[string]string, len(s.Order))
+	for _, id := range s.Order {
+		occurrences[occurrenceID(id, day)] = id
+	}
 	for _, t := range s.Tasks {
+		if id, ok := occurrences[t.ID]; ok {
+			existing[id] = true
+		}
 		if t.Day == day && t.RoutineID != "" {
 			existing[t.RoutineID] = true
 		}
@@ -358,7 +366,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		running.Sessions[len(running.Sessions)-1].End = &now
 		running.State = "done"
-	case "delete":
+	case "paste":
+		return s.paste(day, args, sections, now)
+	case "cut", "delete":
 		if len(args) == 0 {
 			return errInvalidCommand
 		}
@@ -380,6 +390,12 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		}
 		for _, t := range targets {
 			t.Deleted = true
+		}
+		if cmd == "cut" {
+			for i := range s.Deletions {
+				s.Deletions[i].Cut = false
+			}
+			batch.Cut = true
 		}
 		s.Deletions = append(s.Deletions, batch)
 	case "undo-delete":

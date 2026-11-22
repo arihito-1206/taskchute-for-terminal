@@ -560,3 +560,41 @@ func TestAddAndInterruptUseCurrentSection(t *testing.T) {
 		t.Fatal("incorrect placement across section boundary")
 	}
 }
+
+func TestCutPasteAcrossDays(t *testing.T) {
+	now := time.Date(2026, 11, 23, 8, 0, 0, 0, time.UTC)
+	const mon, tue = "2026-11-23", "2026-11-24"
+	r := routine{ID: "repeat", Title: "Read", FirstDay: mon, Days: []string{"mon", "tue"}}
+	s := state{Routines: map[string]routine{r.ID: r}, Order: []string{r.ID}}
+	s.fill(mon)
+	original := s.rows(mon)[0]
+	extra := &task{ID: "extra", Day: mon, State: "pending"}
+	s.Tasks = append(s.Tasks, extra)
+	run := func(day, cmd string, args ...string) {
+		t.Helper()
+		if err := s.apply(day, cmd, args, now, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run(mon, "cut", extra.ID, original.ID)
+	s.fill(tue)
+	anchor := s.rows(tue)[0]
+	run(tue, "paste", "after", anchor.ID)
+	s.fill(mon)
+	s.fill(tue)
+	if len(s.rows(mon)) != 0 || !slices.Equal(s.rows(tue), []*task{anchor, extra, original}) || original.RoutineID != r.ID {
+		t.Fatal("incorrect order or regenerated routine")
+	}
+	if err := s.apply(tue, "paste", nil, now, nil); err == nil {
+		t.Fatal("pasted twice")
+	}
+	original.State = "done"
+	run(tue, "cut", extra.ID, original.ID)
+	if err := s.apply(mon, "paste", nil, now, nil); err == nil || !extra.Deleted {
+		t.Fatal("partial paste of a log")
+	}
+	run(tue, "undo-delete")
+	if original.Deleted || extra.Deleted {
+		t.Fatal("failed to restore cut")
+	}
+}

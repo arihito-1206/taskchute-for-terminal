@@ -108,8 +108,8 @@ func (m *terminal) normalKey(key string) bool {
 				for _, t := range rows[m.selected:end] {
 					ids = append(ids, t.ID)
 				}
-				if m.execute("delete", ids...) {
-					m.notice = fmt.Sprintf("Deleted %d task(s). U to undo.", len(ids))
+				if m.execute("cut", ids...) {
+					m.notice = fmt.Sprintf("Cut %d task(s). p paste pending · U restore.", len(ids))
 				}
 				return false
 			}
@@ -220,6 +220,18 @@ func (m *terminal) normalKey(key string) bool {
 			list = m.taskListFor(m.data.rows(m.day), "", m.planning)
 		}
 		m.moveTask(list, target, key)
+	case "p":
+		if !m.list {
+			m.notice = "Open the task list to paste."
+			break
+		}
+		args := []string{}
+		if target != nil {
+			args = []string{"after", target.ID}
+		} else if m.sectionID != "" {
+			args = []string{"section", m.sectionID}
+		}
+		m.execute("paste", args...)
 	case "I":
 		m.execute("interrupt")
 	case "s", "enter":

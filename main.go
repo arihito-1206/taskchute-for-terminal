@@ -20,7 +20,7 @@ set-start ID HHMM | set-end ID HHMM|- [INTERVAL] | reset ID | move ID before|aft
 routine ID REPEAT [MIN] | routine-move ID up|down | routine-delete ID
 REPEAT: daily[/N] | weekday[/N] | holiday[/N] | mon,wed[/N] | weekly:N:WEEKDAY | monthly:DAY[/N] | monthly:WEEK:WEEKDAY[/N]
 section ID SECTION|- | routine-section ID SECTION|-
-delete ID... | undo-delete | import-python PATH
+cut ID... | paste [after ID|section ID] | delete ID... | undo-delete | import-python PATH
 backup | restore-backup`
 
 func run() error {
