@@ -13,17 +13,30 @@ import (
 // syncData uses a dedicated checkout. The app keeps writing the working copy
 // while Git carries committed snapshots between machines.
 func (r repository) syncData(restore bool) error {
+	return r.syncBackup(context.Background(), restore, false)
+}
+
+var errNoBackupCheckout = errors.New("use --data with tasks.json in a dedicated private Git checkout")
+var errBackupCurrent = errors.New("backup already up to date")
+
+func (r repository) syncBackup(ctx context.Context, restore, automatic bool) error {
 	path, err := filepath.Abs(r.path)
 	if err != nil {
 		return err
 	}
 	dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if automatic && errors.Is(err, os.ErrNotExist) {
+		return errNoBackupCheckout
+	}
 	if err != nil {
 		return err
 	}
 	name := filepath.Base(path)
 	git := func(args ...string) (string, error) {
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(ctx, "git", args...)
+		if automatic {
+			cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		}
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -33,14 +46,20 @@ func (r repository) syncData(restore bool) error {
 	}
 	top, err := git("rev-parse", "--show-toplevel")
 	if err != nil {
-		return errors.New("use --data with tasks.json in a dedicated private Git checkout")
+		return errNoBackupCheckout
 	}
 	top, err = filepath.EvalSymlinks(top)
 	if err != nil || top != dir || name != "tasks.json" {
+		if automatic {
+			return errNoBackupCheckout
+		}
 		return errors.New("--data must point to tasks.json at the root of the backup checkout")
 	}
 	upstream, err := git("rev-parse", "--symbolic-full-name", "@{upstream}")
 	if err != nil || !strings.HasPrefix(upstream, "refs/remotes/origin/") {
+		if automatic {
+			return errNoBackupCheckout
+		}
 		return errors.New("check out a branch tracking origin; initialize the private repository first")
 	}
 	branch := strings.TrimPrefix(upstream, "refs/remotes/origin/")
@@ -61,13 +80,18 @@ func (r repository) syncData(restore bool) error {
 			return err
 		}
 		if restore {
-			if changes != "" {
-				return errors.New("tasks.json has local changes; back it up before pulling")
-			}
 			// Validate the exact incoming commit before replacing local data.
 			target, err := git("rev-parse", upstream+"^{commit}")
 			if err != nil {
 				return err
+			}
+			if automatic {
+				if _, err := git("merge-base", "--is-ancestor", target, "HEAD"); err == nil {
+					return errBackupCurrent
+				}
+			}
+			if changes != "" {
+				return errors.New("tasks.json has local changes; reconcile them before restoring")
 			}
 			entry, err := git("ls-tree", target, "--", name)
 			if err != nil {
@@ -97,7 +121,9 @@ func (r repository) syncData(restore bool) error {
 			if err := os.Chmod(r.path, 0600|restored.Mode().Perm()&0100); err != nil {
 				return fmt.Errorf("protect restored data: %w", err)
 			}
-			fmt.Println("Backup pulled. Open TaskChute with the same --data path.")
+			if !automatic {
+				fmt.Println("Backup pulled. Open TaskChute with the same --data path.")
+			}
 			return nil
 		}
 		if _, err = git("merge-base", "--is-ancestor", upstream, "HEAD"); err != nil {

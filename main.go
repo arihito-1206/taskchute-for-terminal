@@ -58,7 +58,12 @@ func run() error {
 			return err
 		}
 		pinned := *day != now.Format(dateLayout)
-		_, err = tea.NewProgram(terminal{app: app, data: initial, day: *day, now: now, pinned: pinned, splash: true}).Run()
+		syncContext, cancel := context.WithCancel(ctx)
+		defer cancel()
+		_, err = tea.NewProgram(terminal{
+			app: app, data: initial, day: *day, now: now, pinned: pinned, splash: true,
+			startupSync: restoreOnStartup(syncContext, repo), notice: "Syncing…",
+		}).Run()
 		return err
 	}
 	cmd, args := flag.Arg(0), flag.Args()[1:]

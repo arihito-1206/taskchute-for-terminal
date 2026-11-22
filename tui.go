@@ -33,6 +33,7 @@ type taskFieldEdit struct {
 }
 
 type terminal struct {
+	startupSync                                          tea.Cmd
 	endEdit                                              endTimeEdit
 	fieldEdit                                            *taskFieldEdit
 	timelineOffset                                       int
@@ -69,7 +70,7 @@ func untilNextSecond(now time.Time) time.Duration {
 type splashDone struct{}
 
 func (m terminal) Init() tea.Cmd {
-	return tea.Batch(clock(), tea.Tick(time.Second, func(time.Time) tea.Msg { return splashDone{} }))
+	return tea.Batch(m.startupSync, clock(), tea.Tick(time.Second, func(time.Time) tea.Msg { return splashDone{} }))
 }
 
 func (m *terminal) execute(cmd string, args ...string) bool {
@@ -239,6 +240,8 @@ func (m terminal) noteTask() *task {
 
 func (m terminal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch event := msg.(type) {
+	case startupSyncResult:
+		m.finishStartupSync(event.err)
 	case tea.WindowSizeMsg:
 		m.width, m.height = event.Width, event.Height
 		m.scroll()
