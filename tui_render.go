@@ -56,14 +56,17 @@ func (m terminal) View() tea.View {
 
 // dayProgress counts the whole displayed day, including tasks outside the current filter.
 func (m terminal) dayProgress(width int, rows []*task) string {
-	done, total := 0, len(rows)
+	started, done, total := 0, 0, len(rows)
 	for _, task := range rows {
 		if task.State == "done" {
 			done++
 		}
+		if task.State == "done" || task.State == "running" || task.legacyPaused() {
+			started++
+		}
 	}
 
-	count := fmt.Sprintf("%d / %d done", done, total)
+	count := fmt.Sprintf("%d / %d started", started, total)
 	complete := total > 0 && done == total
 	if complete {
 		count += " 🎉"
@@ -78,7 +81,7 @@ func (m terminal) dayProgress(width int, rows []*task) string {
 		return ansi.Truncate(prefix+count, width, "…")
 	}
 
-	filled := done * cells / total
+	filled := started * cells / total
 	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("#55D9DC"))
 	violet := lipgloss.NewStyle().Foreground(lipgloss.Color("#B38CFF"))
 	gold := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166"))
