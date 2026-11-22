@@ -128,7 +128,7 @@ func TestRoutineRepeatCanBeSetFromTaskList(t *testing.T) {
 	m = sectionPress(m, []rune("weekly:1:tue 30")...)
 	m = sectionPress(m, tea.KeyEnter, 'v')
 	view := m.render(100)
-	if !strings.Contains(view, "tue") || !strings.Contains(view, "30m") {
+	if !strings.Contains(view, "tue") || !strings.Contains(view, "00:30") {
 		t.Fatalf("routine view omitted the repeat rule or estimate:\n%s", view)
 	}
 }

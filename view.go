@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode"
@@ -12,6 +13,14 @@ import (
 func duration(d time.Duration) string {
 	seconds := int64(d / time.Second)
 	return fmt.Sprintf("%02d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
+}
+
+func estimateColumn(minutes *float64) string {
+	if minutes == nil {
+		return "-"
+	}
+	total := int(math.Round(*minutes))
+	return fmt.Sprintf("%02d:%02d", total/60, total%60)
 }
 
 func estimateLabel(m *float64) string {
@@ -100,7 +109,7 @@ func row(t *task, day string, now time.Time, width int, name, codeLabel string) 
 		}
 	}
 	name = runewidth.FillRight(name, width)
-	return fmt.Sprintf("%-7s  %s  %6s  %-11s  %-11s  %s", label, name, estimateLabel(t.Minutes), start, end, duration(elapsed(t, now)))
+	return fmt.Sprintf("%-7s  %s  %6s  %-11s  %-11s  %s", label, name, estimateColumn(t.Minutes), start, end, duration(elapsed(t, now)))
 }
 
 type taskOutput struct {
