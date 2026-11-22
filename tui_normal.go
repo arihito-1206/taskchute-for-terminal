@@ -217,7 +217,7 @@ func (m *terminal) normalKey(key string) bool {
 		m.selected = len(rows) - 1
 	case "J", "K":
 		if m.filter != "" {
-			list = m.taskListFor("", m.planning)
+			list = m.taskListFor(m.data.rows(m.day), "", m.planning)
 		}
 		m.moveTask(list, target, key)
 	case "s", "enter":

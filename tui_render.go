@@ -55,13 +55,9 @@ func (m terminal) View() tea.View {
 }
 
 // dayProgress counts the whole displayed day, including tasks outside the current filter.
-func (m terminal) dayProgress(width int) string {
-	done, total := 0, 0
-	for _, task := range m.data.Tasks {
-		if task.Day != m.day || task.Deleted {
-			continue
-		}
-		total++
+func (m terminal) dayProgress(width int, rows []*task) string {
+	done, total := 0, len(rows)
+	for _, task := range rows {
 		if task.State == "done" {
 			done++
 		}
@@ -161,9 +157,11 @@ func (m terminal) render(width int) string {
 		viewLabel = "PLAN | "
 	}
 	line("  " + viewLabel + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
-	list := m.taskList()
+	dayRows := m.data.rows(m.day)
+	list := m.taskListFor(dayRows, m.taskFilter(), m.planning)
 	rows := list.rows
-	forecast := m.data.output(m.day, m.now)
+	running := m.data.running()
+	forecast := m.data.outputForRows(m.day, m.now, dayRows, running)
 	forecast.Next = nil
 	if next := firstPending(rows); next != nil {
 		item := formatTask(next, m.now)
@@ -173,7 +171,6 @@ func (m terminal) render(width int) string {
 	if m.sectionID != "" && m.mode == "" {
 		summaryLines[1], _, _ = strings.Cut(summaryLines[1], " | Day ends ")
 	}
-	running := m.data.running()
 	for i, s := range summaryLines {
 		if i == 0 && running != nil {
 			fmt.Fprintln(&b, runningBand("  ▶ "+s, min(width, 90)))
@@ -193,7 +190,7 @@ func (m terminal) render(width int) string {
 			b.WriteString("  \x1b[36;1m" + runewidth.Truncate(s, max(1, width-2), "…") + "\x1b[0m\n")
 		}
 	}
-	fmt.Fprintln(&b, m.dayProgress(width))
+	fmt.Fprintln(&b, m.dayProgress(width, dayRows))
 	if t := running; t != nil && len(t.Sessions) > 0 {
 		details := "  Started " + timeLabel(t.Sessions[0].Start, m.day, m.now.Location()) + " | Est. " + estimateLabel(t.Minutes)
 		if t.WorkCode != "" && !(m.list && m.mode == "") {
@@ -259,7 +256,7 @@ func (m terminal) render(width int) string {
 			query := m.taskFilter()
 			capacity := sectionCapacity
 			if query != "" || m.planning {
-				full := m.taskListFor("", false)
+				full := m.taskListFor(dayRows, "", false)
 				capacity = func(s section, _ []*task) string {
 					if m.sectionID != "" {
 						return sectionCapacity(s, full.rows)

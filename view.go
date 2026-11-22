@@ -143,11 +143,15 @@ func formatTask(t *task, now time.Time) taskOutput {
 }
 
 func (s *state) output(day string, now time.Time) output {
+	return s.outputForRows(day, now, s.rows(day), s.running())
+}
+
+func (s *state) outputForRows(day string, now time.Time, rows []*task, running *task) output {
 	o := output{Day: day, Tasks: []taskOutput{}, Routines: []routine{}, Available: day == now.Format(dateLayout)}
 	for _, id := range s.Order {
 		o.Routines = append(o.Routines, s.Routines[id])
 	}
-	for _, t := range s.rows(day) {
+	for _, t := range rows {
 		item := formatTask(t, now)
 		o.Tasks = append(o.Tasks, item)
 		if t.State == "pending" && o.Next == nil {
@@ -159,7 +163,7 @@ func (s *state) output(day string, now time.Time) output {
 			o.Remaining += *item.Remaining
 		}
 	}
-	if t := s.running(); t != nil {
+	if t := running; t != nil {
 		item := formatTask(t, now)
 		o.Running = &item
 		o.Available = o.Available && t.Day == day

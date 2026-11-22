@@ -156,11 +156,14 @@ func (m terminal) taskFilter() string {
 }
 
 func (m terminal) taskList() taskList {
-	return m.taskListFor(m.taskFilter(), m.planning)
+	return m.taskListFor(m.data.rows(m.day), m.taskFilter(), m.planning)
 }
 
-func (m terminal) taskListFor(query string, remainingOnly bool) taskList {
-	rows := m.data.rows(m.day)
+func (m terminal) taskListFor(rows []*task, query string, remainingOnly bool) taskList {
+	// Filtering compacts the slice in place. Preserve the full day for totals.
+	if remainingOnly || query != "" || m.sectionID != "" {
+		rows = slices.Clone(rows)
+	}
 	if remainingOnly {
 		rows = slices.DeleteFunc(rows, func(t *task) bool { return t.State == "done" })
 		if len(rows) == 0 {
