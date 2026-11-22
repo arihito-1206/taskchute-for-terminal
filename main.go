@@ -61,7 +61,7 @@ func run() error {
 		syncContext, cancel := context.WithCancel(ctx)
 		defer cancel()
 		_, err = tea.NewProgram(terminal{
-			app: app, data: initial, day: *day, now: now, pinned: pinned, splash: true,
+			app: app, data: initial, day: *day, now: now, pinned: pinned, splash: true, dayEndTarget: config.DayEndTarget,
 			startupSync: restoreOnStartup(syncContext, repo), notice: "Syncing…",
 		}).Run()
 		return err

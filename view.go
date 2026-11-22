@@ -163,16 +163,6 @@ func summary(s *state, day string, now time.Time) string {
 	return renderSummary(s.output(day, now), now)
 }
 
-func summaryWithNext(s *state, day string, now time.Time, next *task) string {
-	o := s.output(day, now)
-	o.Next = nil
-	if next != nil {
-		item := formatTask(next, now)
-		o.Next = &item
-	}
-	return renderSummary(o, now)
-}
-
 func renderSummary(o output, now time.Time) string {
 	focus := "Ready"
 	if o.Running != nil {

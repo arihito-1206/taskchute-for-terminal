@@ -9,8 +9,9 @@ import (
 )
 
 type settings struct {
-	DataPath string    `json:"data_path"`
-	Sections []section `json:"sections"`
+	DataPath     string    `json:"data_path"`
+	Sections     []section `json:"sections"`
+	DayEndTarget string    `json:"day_end_target"`
 }
 
 func loadSettings(explicit string) (settings, error) {
@@ -36,6 +37,9 @@ func loadSettings(explicit string) (settings, error) {
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return settings{}, fmt.Errorf("read config: %w", err)
+	}
+	if config.DayEndTarget != "" && config.DayEndTarget != "24:00" && !validSectionTime(config.DayEndTarget) {
+		return settings{}, fmt.Errorf("parse %s: day_end_target must use HH:MM (24:00 allowed)", filename)
 	}
 	if err := config.prepareSections(); err != nil {
 		return settings{}, fmt.Errorf("parse %s: %w", filename, err)

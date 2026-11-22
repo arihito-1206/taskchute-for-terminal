@@ -33,6 +33,7 @@ type taskFieldEdit struct {
 }
 
 type terminal struct {
+	dayEndTarget                                         string
 	startupSync                                          tea.Cmd
 	endEdit                                              endTimeEdit
 	fieldEdit                                            *taskFieldEdit

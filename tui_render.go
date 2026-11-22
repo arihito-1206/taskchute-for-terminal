@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -108,6 +109,26 @@ func (m terminal) dayProgress(width int) string {
 	return prefix + bar.String() + "  " + countStyle.Render(count)
 }
 
+func dayEndDisplay(finish, target string, forecast output, location *time.Location) (string, string) {
+	const defaultColor = "\x1b[1;35m"
+	finish = "Day ends " + finish
+	if target == "" || !forecast.Available {
+		return finish, defaultColor
+	}
+	day, err := time.ParseInLocation(dateLayout, forecast.Day, location)
+	if err != nil {
+		return finish, defaultColor
+	}
+	minutes := sectionMinute(target)
+	deadline := time.Date(day.Year(), day.Month(), day.Day(), minutes/60, minutes%60, 0, 0, location)
+	finish += " / " + target
+	over := forecast.Finish.Truncate(time.Minute).Sub(deadline)
+	if over > 0 {
+		return fmt.Sprintf("%s (+%dm)", finish, over/time.Minute), "\x1b[1;31m"
+	}
+	return finish, "\x1b[1;34m"
+}
+
 func (m terminal) render(width int) string {
 	if m.mode == modeTimeline {
 		return m.timelineView(width)
@@ -138,7 +159,13 @@ func (m terminal) render(width int) string {
 	line("  " + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
 	list := m.taskList()
 	rows := list.rows
-	summaryLines := strings.Split(summaryWithNext(m.data, m.day, m.now, firstPending(rows)), "\n")
+	forecast := m.data.output(m.day, m.now)
+	forecast.Next = nil
+	if next := firstPending(rows); next != nil {
+		item := formatTask(next, m.now)
+		forecast.Next = &item
+	}
+	summaryLines := strings.Split(renderSummary(forecast, m.now), "\n")
 	if m.sectionID != "" && m.mode == "" {
 		summaryLines[1], _, _ = strings.Cut(summaryLines[1], " | Day ends ")
 	}
@@ -150,8 +177,14 @@ func (m terminal) render(width int) string {
 		}
 		if i == 1 && strings.Contains(s, " | Day ends ") {
 			next, finish, _ := strings.Cut(s, " | Day ends ")
-			next = runewidth.Truncate(strings.TrimPrefix(next, "Next "), max(0, width-runewidth.StringWidth(finish)-20), "...")
-			b.WriteString("  \x1b[2mNext " + next + "\x1b[0m | \x1b[1;35mDay ends " + finish + "\x1b[0m\n")
+			finish, color := dayEndDisplay(finish, m.dayEndTarget, forecast, m.now.Location())
+			remaining := width - runewidth.StringWidth("  Next  | "+finish)
+			if remaining < 1 {
+				b.WriteString("  " + color + runewidth.Truncate(finish, max(0, width-2), "…") + "\x1b[0m\n")
+				continue
+			}
+			next = runewidth.Truncate(strings.TrimPrefix(next, "Next "), remaining, "...")
+			b.WriteString("  \x1b[2mNext " + next + "\x1b[0m | " + color + finish + "\x1b[0m\n")
 		} else {
 			b.WriteString("  \x1b[36;1m" + runewidth.Truncate(s, max(1, width-2), "…") + "\x1b[0m\n")
 		}
