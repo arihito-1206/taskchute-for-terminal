@@ -66,7 +66,7 @@ func (m terminal) dayProgress(width int, rows []*task) string {
 	count := fmt.Sprintf("%d / %d done", done, total)
 	complete := total > 0 && done == total
 	if complete {
-		count += " ✦"
+		count += " 🎉"
 	}
 	label := "Today"
 	if m.day != m.now.Format(dateLayout) {
