@@ -487,3 +487,25 @@ func TestReturnToTodayResumesFollowingDate(t *testing.T) {
 		t.Fatalf("did not follow the date after returning to today: %s", got)
 	}
 }
+
+func TestEditOvernightTaskTimes(t *testing.T) {
+	now := time.Date(2026, 11, 22, 1, 0, 0, 0, time.UTC)
+	task := &task{ID: "overnight", Day: "2026-11-21", State: "pending"}
+	s := state{}
+	s.Tasks = append(s.Tasks, task)
+	edit := func(cmd, value string) {
+		t.Helper()
+		if err := s.apply(task.Day, cmd, []string{task.ID, value}, now, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	edit("set-start", "2330")
+	edit("set-end", "0030")
+	if task.State != "done" || len(task.Sessions) != 1 || task.Sessions[0].End == nil || !task.Sessions[0].Start.Equal(now.Add(-90*time.Minute)) || !task.Sessions[0].End.Equal(now.Add(-30*time.Minute)) {
+		t.Fatalf("unexpected overnight interval: %+v", task)
+	}
+	edit("set-end", "-")
+	if task.State != "running" || len(task.Sessions) != 1 || task.Sessions[0].End != nil {
+		t.Fatalf("expected the same interval to resume: %+v", task)
+	}
+}
