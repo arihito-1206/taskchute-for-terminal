@@ -160,18 +160,23 @@ func (m *terminal) normalKey(key string) bool {
 			m.showList(m.sectionID, target)
 			break
 		}
-		if m.sectionID != "" {
+		if m.planning {
+			if m.sectionID == "" {
+				m.planning = false
+			}
+			m.showList("", target)
+		} else if m.sectionID != "" {
 			m.list, m.sectionID = false, ""
 		}
 	case "l":
 		if !m.list || m.sectionID != "" {
 			m.showList("", target)
 		} else {
-			m.list, m.filter = false, ""
+			m.list, m.planning, m.filter = false, false, ""
 		}
 	case "L":
 		if m.sectionID != "" {
-			m.list, m.sectionID, m.notice, m.filter = false, "", "", ""
+			m.list, m.planning, m.sectionID, m.notice, m.filter = false, false, "", "", ""
 			break
 		}
 		s, ok := sectionAt(m.app.sections, m.now)

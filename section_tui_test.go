@@ -406,3 +406,28 @@ func TestCountedSectionMoveToCurrentSection(t *testing.T) {
 		t.Fatalf("unexpected result: mode %q, order %v", m.mode, ids)
 	}
 }
+
+func TestPlanFinishAndAdd(t *testing.T) {
+	now := time.Now()
+	repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+	m := terminal{app: application{store: repo}, data: &state{}, now: now, day: now.Format(dateLayout)}
+	if !m.execute("add", "First") || !m.execute("start") {
+		t.Fatal(m.notice)
+	}
+	m = sectionPress(m, ':', 'p', 'l', 'a', 'n', tea.KeyEnter)
+	if !m.planning || m.target() == nil || m.target().State != "running" {
+		t.Fatal("missing running task in Plan")
+	}
+	m = sectionPress(m, 's', 'a', tea.KeyEsc)
+	if !m.planning || m.target() != nil || !strings.Contains(m.render(100), "No remaining tasks") {
+		t.Fatal("expected empty Plan after cancel")
+	}
+	m = sectionPress(m, 'a', 'N', 'e', 'w', tea.KeyEnter)
+	if !m.planning || m.target() == nil || m.target().Title != "New" {
+		t.Fatal("new task was not selected in Plan", m.notice)
+	}
+	m = sectionPress(m, tea.KeyEsc)
+	if m.planning || !m.list || len(m.visibleRows()) != 2 {
+		t.Fatal("expected full list")
+	}
+}

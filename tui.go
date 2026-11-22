@@ -48,7 +48,7 @@ type terminal struct {
 	picker                                               sectionPicker
 	day                                                  string
 	now                                                  time.Time
-	pinned, splash, list, deleting                       bool
+	pinned, splash, list, planning, deleting             bool
 	selected, offset, routineIndex, width, height, count int
 	input, notice, noteID, noteDay                       string
 	// mode is the screen that owns the keyboard; "" is the task list or focus view.
@@ -161,6 +161,12 @@ func (m terminal) taskList() taskList {
 
 func (m terminal) taskListFor(query string) taskList {
 	rows := m.data.rows(m.day)
+	if m.planning {
+		rows = slices.DeleteFunc(rows, func(t *task) bool { return t.State == "done" })
+		if len(rows) == 0 {
+			return taskList{}
+		}
+	}
 	if query != "" {
 		query = strings.ToLower(query)
 		rows = slices.DeleteFunc(rows, func(t *task) bool {

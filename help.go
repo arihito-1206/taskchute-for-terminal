@@ -13,6 +13,7 @@ var commandGuides = []commandGuide{
 	{"add [MIN] TITLE", "add Read  /  add 15 Read"},
 	{"start [ID]", "Start next or by ID. A done task starts a copy."},
 	{"done", "Finish the running task."},
+	{"plan", "Show remaining tasks. Esc returns to the full list."},
 	{"ls", "Show today's task list."},
 	{"status", "Show the focus view."},
 	{"rename @ TITLE", "rename @ Read a chapter"},

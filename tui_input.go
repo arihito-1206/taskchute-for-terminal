@@ -106,7 +106,15 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			}
 		}
 		switch cmd {
-		case "ls", "status", "help", "routines":
+		case "plan", "ls", "status", "help", "routines":
+			if cmd == "plan" {
+				target := m.target()
+				m.planning, m.filter = true, ""
+				m.showList("", target)
+			}
+			if cmd == "ls" || cmd == "status" {
+				m.planning = false
+			}
 			if cmd == "ls" {
 				m.showList("", m.target())
 			}
@@ -127,6 +135,15 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 				return
 			}
 			m.mode = m.commandReturn
+			if cmd == "add" && m.planning {
+				// add appends the new task to the store.
+				added := m.data.Tasks[len(m.data.Tasks)-1]
+				if taskIndex(m.visibleRows(), added.ID) < 0 {
+					m.filter, m.sectionID = "", ""
+				}
+				m.selectTask(added.ID)
+				m.scroll()
+			}
 		}
 		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	default:

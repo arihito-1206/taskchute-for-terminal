@@ -156,7 +156,11 @@ func (m terminal) render(width int) string {
 		}
 		fmt.Fprintln(&b, runewidth.Truncate(terminalText(s, false), max(1, width), "…"))
 	}
-	line("  " + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
+	viewLabel := ""
+	if m.planning {
+		viewLabel = "PLAN | "
+	}
+	line("  " + viewLabel + dateWithWeekday(m.day) + " | Alt+h/l: day | Alt+t: today")
 	list := m.taskList()
 	rows := list.rows
 	forecast := m.data.output(m.day, m.now)
@@ -289,6 +293,8 @@ func (m terminal) render(width int) string {
 					line("  No matching tasks.")
 				} else if m.sectionID != "" {
 					line("  No tasks in this section.")
+				} else if m.planning {
+					line("  No remaining tasks. Press a to add.")
 				}
 			}
 			list.draw(m.offset, m.room(), width, line, func(i int, task *task) {
