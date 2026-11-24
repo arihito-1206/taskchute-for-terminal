@@ -145,16 +145,10 @@ func (m terminal) render(width int) string {
 		return startupMark
 	}
 	var b strings.Builder
-	sectionRule := strings.Repeat("─", max(1, width))
 	line := func(s string) {
-		// Section rules are already sized in terminal columns. Width libraries
-		// can classify the rule glyph as double-width under East Asian settings.
-		if s == sectionRule {
-			fmt.Fprintln(&b, s)
-			return
-		}
 		fmt.Fprintln(&b, runewidth.Truncate(terminalText(s, false), max(1, width), "…"))
 	}
+	headerLine := func(s string) { fmt.Fprintln(&b, s) }
 	viewLabel := ""
 	if m.planning {
 		viewLabel = "PLAN | "
@@ -207,7 +201,7 @@ func (m terminal) render(width int) string {
 	line(strings.Repeat("-", min(width, 90)))
 	switch m.mode {
 	case modeRoutines:
-		m.drawRoutines(line, width)
+		m.drawRoutines(line, headerLine, width)
 	case modeCommand:
 		categoryInput := false
 		if edit := m.endEdit; edit.task != nil {
@@ -282,9 +276,15 @@ func (m terminal) render(width int) string {
 					return ""
 				}
 			}
+			visibleCapacity := func(s section, members []*task) string {
+				if sectionEnded(s, m.day, m.now) {
+					return ""
+				}
+				return capacity(s, members)
+			}
 			if s, ok := sectionByID(m.app.sections, m.sectionID); ok {
-				for _, text := range sectionHeaderLines(s, capacity(s, rows), width) {
-					line(text)
+				for _, text := range sectionHeaderLines(s, visibleCapacity(s, rows), width) {
+					headerLine(text)
 				}
 			}
 			titleWidth := max(8, min(60, width-56))
@@ -307,7 +307,7 @@ func (m terminal) render(width int) string {
 					line("  No remaining tasks. Press a to add.")
 				}
 			}
-			list.draw(m.offset, m.room(), width, line, func(i int, task *task) {
+			list.draw(m.offset, m.room(), width, headerLine, func(i int, task *task) {
 				codeLabel := ""
 				if task.WorkCode != "" {
 					codeLabel = "🔖"
@@ -358,7 +358,7 @@ func (m terminal) render(width int) string {
 						}
 					}
 				}
-			}, capacity)
+			}, visibleCapacity)
 			line("  j/k select | f focus | J/K move | b section | / filter | [count]dd delete | U undo")
 		}
 	}

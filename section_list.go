@@ -111,7 +111,7 @@ func (l sectionList[T]) page(index, offset, room, step int) (int, int) {
 	return index, offset
 }
 
-func (l sectionList[T]) draw(offset, room, width int, line func(string), drawRow func(int, T), capacity func(section, []T) string) {
+func (l sectionList[T]) draw(offset, room, width int, headerLine func(string), drawRow func(int, T), capacity func(section, []T) string) {
 	end := offset + room
 	drawRows := func(start, stop, headers int) {
 		for i := max(start, offset-headers); i < min(stop, end-headers); i++ {
@@ -130,7 +130,7 @@ func (l sectionList[T]) draw(offset, room, width int, line func(string), drawRow
 			}
 			for j, text := range sectionHeaderLines(group.section, status, width) {
 				if at := heading + j; at >= offset && at < end {
-					line(text)
+					headerLine(text)
 				}
 			}
 		}
@@ -152,6 +152,10 @@ func sectionHeaderLines(s section, capacity string, width int) []string {
 			label = "  " + capacity
 		}
 	}
-	rule := strings.Repeat("─", width)
-	return []string{rule, label, rule}
+	label = runewidth.Truncate(terminalText(label, false), width, "…")
+	label = runewidth.FillRight(label, width)
+	const background = "\x1b[48;2;36;44;56m"
+	const reset = "\x1b[0m"
+	rule := background + "\x1b[38;5;245m" + strings.Repeat("─", width) + reset
+	return []string{rule, background + "\x1b[38;5;252m" + label + reset, rule}
 }

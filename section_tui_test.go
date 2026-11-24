@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func sectionPress(m terminal, keys ...rune) terminal {
@@ -69,16 +70,20 @@ func TestSectionListPinsAndDeletesVisibleTasks(t *testing.T) {
 	if m.sectionID != "morning" {
 		t.Fatalf("section changed during a gap: %q, %q", m.sectionID, m.notice)
 	}
-	if got := m.render(100); !strings.Contains(got, "Free 03:00:00 | 2 unestimated") {
-		t.Fatalf("section capacity changed after the section ended:\n%s", got)
+	if got := m.render(100); !strings.Contains(got, "Morning  09:00 – 12:00") ||
+		strings.Contains(got, "Free ") || strings.Contains(got, "unestimated") {
+		t.Fatalf("ended section should show its heading without capacity:\n%s", got)
 	}
 	m = sectionPress(m, '2', 'd', 'd')
 	m = sectionPress(m, 'l')
 	if !m.list || m.sectionID != "" || len(m.visibleRows()) != 1 || m.target().ID != "afternoon-1" {
 		t.Fatalf("counted delete did not use filtered rows: %+v", m.visibleRows())
 	}
-	rule := strings.Repeat("─", 100)
-	if got := m.render(100); !strings.Contains(got, rule+"\n  Afternoon  13:00 – 18:00  │  Free 05:00:00 | 1 unestimated\n"+rule) {
+	background := "\x1b[48;2;36;44;56m"
+	rule := background + "\x1b[38;5;245m" + strings.Repeat("─", 100) + "\x1b[0m"
+	label := "  Afternoon  13:00 – 18:00  │  Free 05:00:00 | 1 unestimated"
+	bar := background + "\x1b[38;5;252m" + label + strings.Repeat(" ", 100-ansi.StringWidth(label)) + "\x1b[0m"
+	if got := m.render(100); !strings.Contains(got, rule+"\n"+bar+"\n"+rule) {
 		t.Fatalf("full list omitted task placement:\n%s", got)
 	}
 	next, _ = m.Update(clockMsg(now.Add(2 * time.Hour)))
@@ -133,7 +138,7 @@ func TestGroupedListMovesThroughAdjacentSections(t *testing.T) {
 	m.height = 40
 	m = sectionPress(m, 'l')
 	assertOrder("a", "b", "c", "d", "e")
-	text := m.render(100)
+	text := ansi.Strip(m.render(100))
 	if !strings.Contains(text, "Alpha / -") {
 		t.Fatalf("Next did not use grouped task order:\n%s", text)
 	}
@@ -240,12 +245,12 @@ func TestGroupedListPagesThroughEmptySections(t *testing.T) {
 		}},
 	}
 	m = sectionPress(m, tea.KeyPgDown, tea.KeyPgDown)
-	if view := m.render(100); !strings.Contains(view, "\n  Third") ||
+	if view := ansi.Strip(m.render(100)); !strings.Contains(view, "\n  Third") ||
 		!strings.Contains(view, "\n  Unassigned") || strings.Contains(view, "\n  First") {
 		t.Fatalf("could not page through empty sections:\n%s", view)
 	}
 	m = sectionPress(m, tea.KeyPgUp, tea.KeyPgUp)
-	if view := m.render(100); !strings.Contains(view, "\n  First") ||
+	if view := ansi.Strip(m.render(100)); !strings.Contains(view, "\n  First") ||
 		!strings.Contains(view, "\n  Second") || strings.Contains(view, "\n  Third") {
 		t.Fatalf("could not page back to first sections:\n%s", view)
 	}

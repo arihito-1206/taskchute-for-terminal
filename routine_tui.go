@@ -145,7 +145,7 @@ func (m *terminal) moveRoutine(list routineList, key string) {
 	}
 }
 
-func (m terminal) drawRoutines(line func(string), width int) {
+func (m terminal) drawRoutines(line, headerLine func(string), width int) {
 	line("  ROUTINES | j/k select | J/K move | b section | c category | C code | dd delete | Esc back")
 	list := m.routineList()
 	repeatWidth := min(27, max(7, width/3))
@@ -155,7 +155,7 @@ func (m terminal) drawRoutines(line func(string), width int) {
 	} else {
 		line(fmt.Sprintf("  %-*s  %-*s %6s", nameWidth, "TASK", repeatWidth, "REPEATS", "EST"))
 	}
-	list.draw(m.routineOffset, m.room(), width, line, func(i int, id string) {
+	list.draw(m.routineOffset, m.room(), width, headerLine, func(i int, id string) {
 		r := m.data.Routines[id]
 		repeat := r.repeatLabel()
 		if len(list.groups) == 0 && r.SectionID != "" {
