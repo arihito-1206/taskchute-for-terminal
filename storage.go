@@ -71,12 +71,17 @@ func (r repository) load(ctx context.Context) (*state, error) {
 	return decodeState(raw)
 }
 
+// Resolve existing file aliases so writers share both the lock and rename target.
+func (r repository) dataPath() string {
+	if path, err := filepath.EvalSymlinks(r.path); err == nil {
+		return path
+	}
+	return r.path
+}
+
 func (r repository) save(s *state) error {
 	// Replace the file a symlinked data path points to, and keep its mode.
-	path, mode := r.path, os.FileMode(0600)
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		path = resolved
-	}
+	path, mode := r.dataPath(), os.FileMode(0600)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm()
 	}
@@ -117,7 +122,7 @@ func (r repository) withLock(fn func() error) error {
 	if err := os.MkdirAll(filepath.Dir(r.path), 0700); err != nil {
 		return err
 	}
-	lock, err := os.OpenFile(r.path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	lock, err := os.OpenFile(r.dataPath()+".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}

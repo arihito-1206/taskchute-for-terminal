@@ -135,6 +135,12 @@ func TestSaveKeepsSymlinkAndMode(t *testing.T) {
 	if err := repo.save(&state{Schema: 1, Tasks: []*task{}}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := repo.update(t.Context(), func(*state) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(real + ".lock"); err != nil {
+		t.Fatalf("update through symlink did not use the target's lock: %v", err)
+	}
 	if info, _ := os.Lstat(link); info.Mode()&os.ModeSymlink == 0 {
 		t.Error("save replaced the symlink with a regular file")
 	}
