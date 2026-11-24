@@ -15,11 +15,15 @@ func duration(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
 }
 
+func roundedMinutes(minutes float64) int {
+	return int(math.Round(minutes))
+}
+
 func estimateColumn(minutes *float64) string {
 	if minutes == nil {
 		return "-"
 	}
-	total := int(math.Round(*minutes))
+	total := roundedMinutes(*minutes)
 	return fmt.Sprintf("%02d:%02d", total/60, total%60)
 }
 
@@ -27,7 +31,7 @@ func estimateLabel(m *float64) string {
 	if m == nil {
 		return "-"
 	}
-	return fmt.Sprintf("%gm", *m)
+	return fmt.Sprintf("%dm", roundedMinutes(*m))
 }
 
 // Treat stored text as terminal content, never as terminal instructions.

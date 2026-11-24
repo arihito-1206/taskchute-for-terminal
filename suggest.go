@@ -97,7 +97,7 @@ func (m terminal) addSuggestions() []inputSuggestion {
 			if t.Minutes != nil {
 				candidate.label += " · " + estimateLabel(t.Minutes)
 				if !explicitEstimate {
-					candidate.input = fmt.Sprintf("add %g %s", *t.Minutes, t.Title)
+					candidate.input = fmt.Sprintf("add %d %s", roundedMinutes(*t.Minutes), t.Title)
 				}
 			} else if first, _, _ := strings.Cut(t.Title, " "); !explicitEstimate && looksLikeEstimate(first) {
 				// "add 10 push-ups" would read 10 as minutes; "-" keeps it a title.

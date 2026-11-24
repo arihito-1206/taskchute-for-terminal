@@ -66,7 +66,7 @@ func TestCanceledUpdateDiscardsMutations(t *testing.T) {
 }
 
 func TestSuggestions(t *testing.T) {
-	estimate := 30.0
+	estimate := 29.5
 	m := terminal{day: "2026-11-20", input: "add 15 re", data: &state{Tasks: []*task{
 		{Title: "Read"}, {Title: "read", Minutes: &estimate}, {Title: "Review"}, {Title: "Removed", Deleted: true}, {Title: "Reserved", Day: "2027-01-01"},
 	}}}
