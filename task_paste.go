@@ -34,9 +34,10 @@ func (s *state) paste(day string, args []string, sections []section, now time.Ti
 	if sec, ok := sectionByID(sections, sectionID); ok && sectionEnded(sec, day, now) {
 		return errors.New("destination section has already ended")
 	}
+	ids := batch.idSet()
 	byID := make(map[string]*task, len(batch.IDs))
 	for _, t := range s.Tasks {
-		if t.Deleted && t.Day == batch.Day {
+		if t.Deleted && t.Day == batch.Day && ids[t.ID] {
 			byID[t.ID] = t
 		}
 	}
@@ -48,7 +49,7 @@ func (s *state) paste(day string, args []string, sections []section, now time.Ti
 		}
 		moving = append(moving, t)
 	}
-	s.Tasks = slices.DeleteFunc(s.Tasks, func(t *task) bool { return t.Deleted && t.Day == batch.Day && slices.Contains(batch.IDs, t.ID) })
+	s.Tasks = slices.DeleteFunc(s.Tasks, func(t *task) bool { return t.Deleted && t.Day == batch.Day && ids[t.ID] })
 	at := len(s.Tasks)
 	if anchor != nil {
 		if anchor.State == "pending" {

@@ -79,6 +79,14 @@ type deletion struct {
 	IDs []string `json:"ids"`
 }
 
+func (d deletion) idSet() map[string]bool {
+	ids := make(map[string]bool, len(d.IDs))
+	for _, id := range d.IDs {
+		ids[id] = true
+	}
+	return ids
+}
+
 type state struct {
 	Schema    int                `json:"schema"`
 	Tasks     []*task            `json:"tasks"`
@@ -407,8 +415,9 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			if batch.Day != day {
 				continue
 			}
+			ids := batch.idSet()
 			for _, t := range s.Tasks {
-				if slices.Contains(batch.IDs, t.ID) {
+				if ids[t.ID] {
 					t.Deleted = false
 				}
 			}
