@@ -283,32 +283,32 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 				return err
 			}
 		}
-	case "add":
-		if len(args) == 0 {
-			return errInvalidCommand
-		}
-		var estimate *float64
-		if len(args) > 1 {
-			_, number := strconv.ParseFloat(args[0], 64)
-			if number == nil || args[0] == "-" {
+	case "add", "add-with-fields":
+		var category, code string
+		if cmd == "add-with-fields" {
+			if len(args) < 3 {
+				return errInvalidCommand
+			}
+			category = args[0]
+			if args[1] != "" {
 				var err error
-				estimate, err = minutes(args[0])
+				code, err = parseWorkCode("code", args[1:2])
 				if err != nil {
 					return err
 				}
-				args = args[1:]
 			}
+			args = args[2:]
 		}
-		title := strings.TrimSpace(strings.Join(args, " "))
-		if title == "" {
-			return errInvalidCommand
+		title, estimate, err := parseAdd(args)
+		if err != nil {
+			return err
 		}
 		sectionID := ""
 		if day == now.Format(dateLayout) {
 			current, _ := sectionAt(sections, now)
 			sectionID = current.ID
 		}
-		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: sectionID, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}})
+		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: sectionID, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}, Category: category, WorkCode: code})
 	case "start":
 		if day > now.Format(dateLayout) {
 			return errors.New("cannot start a task scheduled for a future day")
@@ -456,6 +456,32 @@ func (s *state) interrupt(now time.Time, sections []section) error {
 	s.Tasks = slices.Insert(s.Tasks, 0, &rest)
 	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: slot.ID, State: "running", Sessions: []session{{Start: now}}})
 	return nil
+}
+
+// looksLikeEstimate reports whether add would read the word as minutes.
+func looksLikeEstimate(word string) bool {
+	if word == "-" {
+		return true
+	}
+	_, err := strconv.ParseFloat(word, 64)
+	return err == nil
+}
+
+func parseAdd(args []string) (string, *float64, error) {
+	var estimate *float64
+	if len(args) > 1 && looksLikeEstimate(args[0]) {
+		var err error
+		estimate, err = minutes(args[0])
+		if err != nil {
+			return "", nil, err
+		}
+		args = args[1:]
+	}
+	title := strings.TrimSpace(strings.Join(args, " "))
+	if title == "" {
+		return "", nil, errInvalidCommand
+	}
+	return title, estimate, nil
 }
 
 func parseCategory(args []string) (string, error) {

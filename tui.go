@@ -40,6 +40,7 @@ type terminal struct {
 	timelineOffset                                       int
 	helpOffset                                           int
 	suggestion                                           int
+	addSource                                            *task
 	inputCursor                                          int
 	routineOffset                                        int
 	app                                                  application

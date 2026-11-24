@@ -68,7 +68,7 @@ func TestCanceledUpdateDiscardsMutations(t *testing.T) {
 func TestSuggestions(t *testing.T) {
 	estimate := 29.5
 	m := terminal{day: "2026-11-20", input: "add 15 re", data: &state{Tasks: []*task{
-		{Title: "Read"}, {Title: "read", Minutes: &estimate}, {Title: "Review"}, {Title: "Removed", Deleted: true}, {Title: "Reserved", Day: "2027-01-01"},
+		{Title: "Read"}, {Title: "read", Minutes: &estimate, Category: "family", WorkCode: "Family Time"}, {Title: "Review"}, {Title: "Removed", Deleted: true}, {Title: "Reserved", Day: "2027-01-01"},
 	}}}
 	history := m.data
 	matches := m.addSuggestions()
@@ -83,13 +83,17 @@ func TestSuggestions(t *testing.T) {
 	repo := repository{filepath.Join(t.TempDir(), "tasks.json")}
 	m.app = application{store: repo}
 	m.mode = "command"
+	if view := m.render(100); !strings.Contains(view, "Category family | Code Family Time") {
+		t.Fatal("missing suggestion metadata preview")
+	}
 	m.edit(tea.KeyPressMsg{Code: tea.KeyEnter})
 	saved, err := repo.load(t.Context())
 	if err != nil || len(saved.Tasks) != 1 {
 		t.Fatal("registration failed", err)
 	}
 	task := saved.Tasks[0]
-	if task.Title != "read" || task.Minutes == nil || *task.Minutes != 15 {
+	if task.Title != "read" || task.Minutes == nil || *task.Minutes != 15 ||
+		task.Category != "family" || task.WorkCode != "Family Time" {
 		t.Fatal(task)
 	}
 	m.data = history

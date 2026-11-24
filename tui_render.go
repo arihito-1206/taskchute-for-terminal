@@ -239,6 +239,16 @@ func (m terminal) render(width int) string {
 		}
 		command, _ := m.commandLine(width)
 		fmt.Fprintln(&b, command)
+		if source := m.addSuggestionSource(m.input); source != nil {
+			var fields []string
+			if source.Category != "" {
+				fields = append(fields, "Category "+source.Category)
+			}
+			if source.WorkCode != "" {
+				fields = append(fields, "Code "+source.WorkCode)
+			}
+			line("  " + strings.Join(fields, " | "))
+		}
 		if categoryInput {
 			line("  💼 work / 仕事 · 🏠 home / 家事 · 🎨 hobby / 趣味 · 📚 study / 学習")
 			line("  ☕ rest / 休憩 · 🍖 meal / 食事 · 👪 family / 家族 | - clears")

@@ -21,7 +21,8 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			m.suggestion = (m.suggestion + step + len(matches)) % len(matches)
 			return
 		case "tab":
-			m.input = matches[m.suggestion%len(matches)].input
+			choice := matches[m.suggestion%len(matches)]
+			m.input, m.addSource = choice.input, choice.source
 			m.inputCursor = len(m.input)
 			m.suggestion = 0
 			return
@@ -31,10 +32,12 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 	switch key.String() {
 	case "esc":
 		m.fieldEdit = nil
+		m.addSource = nil
 		m.endEdit = endTimeEdit{}
 		m.mode, m.notice = m.commandReturn, ""
 		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	case "ctrl+u":
+		m.addSource = nil
 		m.input, m.inputCursor = "", 0
 	case "left", "ctrl+b":
 		_, size := utf8.DecodeLastRuneInString(m.input[:m.inputCursor])
@@ -123,7 +126,12 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			m.routineIndex, m.routineOffset = 0, 0
 			m.scrollRoutines()
 		default:
-			if !m.execute(cmd, args...) {
+			executeCmd := cmd
+			if source := m.addSuggestionSource(input); source != nil {
+				executeCmd = "add-with-fields"
+				args = append([]string{source.Category, source.WorkCode}, args...)
+			}
+			if !m.execute(executeCmd, args...) {
 				return
 			}
 			m.mode = m.commandReturn
@@ -137,6 +145,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 				m.scroll()
 			}
 		}
+		m.addSource = nil
 		m.input, m.inputCursor, m.commandReturn = "", 0, ""
 	default:
 		if key.Text != "" {
@@ -146,8 +155,25 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 }
 
 func (m *terminal) openCommand(input string) {
+	m.addSource = nil
 	m.commandReturn, m.mode, m.input, m.notice = m.mode, modeCommand, input, ""
 	m.inputCursor, m.suggestion = len(input), 0
+}
+
+func (m terminal) addSuggestionSource(input string) *task {
+	source := m.addSource
+	if source == nil || (source.Category == "" && source.WorkCode == "") {
+		return nil
+	}
+	words := strings.Fields(input)
+	if len(words) == 0 || words[0] != "add" {
+		return nil
+	}
+	title, _, err := parseAdd(words[1:])
+	if err != nil || title != strings.Join(strings.Fields(source.Title), " ") {
+		return nil
+	}
+	return source
 }
 
 func (m *terminal) insertCommandText(value string) {

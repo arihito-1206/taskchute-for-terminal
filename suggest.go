@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
 type inputSuggestion struct {
-	label string
-	input string
+	label  string
+	input  string
+	source *task
 }
 
 func (m terminal) inputSuggestions() []inputSuggestion {
@@ -93,7 +93,7 @@ func (m terminal) addSuggestions() []inputSuggestion {
 		name := strings.ToLower(t.Title)
 		if !seen[name] {
 			seen[name] = true
-			candidate := inputSuggestion{label: t.Title, input: prefix + t.Title}
+			candidate := inputSuggestion{label: t.Title, input: prefix + t.Title, source: t}
 			if t.Minutes != nil {
 				candidate.label += " · " + estimateLabel(t.Minutes)
 				if !explicitEstimate {
@@ -111,15 +111,6 @@ func (m terminal) addSuggestions() []inputSuggestion {
 		}
 	}
 	return append(prefixes, partials[:min(len(partials), limit-len(prefixes))]...)
-}
-
-// looksLikeEstimate reports whether add would read the word as minutes.
-func looksLikeEstimate(word string) bool {
-	if word == "-" {
-		return true
-	}
-	_, err := strconv.ParseFloat(word, 64)
-	return err == nil
 }
 
 // hasPrefixFold compares without allocating; prefix must already be lower case.
