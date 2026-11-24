@@ -340,7 +340,7 @@ func (m terminal) render(width int) string {
 					}
 				}
 			}, capacity)
-			line("  j/k select | J/K move | b section | / filter | [count]dd delete | U undo")
+			line("  j/k select | f focus | J/K move | b section | / filter | [count]dd delete | U undo")
 		}
 	}
 	if m.notice != "" {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -215,6 +216,21 @@ func (m *terminal) normalKey(key string) bool {
 	case "G":
 		m.list = true
 		m.selected = len(rows) - 1
+	case "f":
+		if !m.list || m.day != m.now.Format(dateLayout) {
+			break
+		}
+		index := slices.IndexFunc(rows, func(t *task) bool { return t.State == "running" })
+		if index < 0 {
+			if section, ok := sectionAt(m.app.sections, m.now); ok {
+				index = slices.IndexFunc(rows, func(t *task) bool {
+					return t.State == "pending" && !t.legacyPaused() && t.SectionID == section.ID
+				})
+			}
+		}
+		if index >= 0 {
+			m.selected = index
+		}
 	case "J", "K":
 		if m.filter != "" {
 			list = m.taskListFor(m.data.rows(m.day), "", m.planning)

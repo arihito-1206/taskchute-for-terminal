@@ -435,3 +435,36 @@ func TestPlanFinishAndAdd(t *testing.T) {
 		t.Fatal("expected full list")
 	}
 }
+
+func TestFocusJumpsWithinTaskList(t *testing.T) {
+	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.Local)
+	day := now.Format(dateLayout)
+	m := terminal{
+		app: application{sections: []section{
+			{ID: "am", Start: "00:00", End: "12:00"},
+			{ID: "pm", Start: "12:00", End: "24:00"},
+		}},
+		data: &state{Tasks: []*task{
+			{ID: "morning", Day: day, State: "pending", SectionID: "am", Title: "Match morning"},
+			{ID: "running", Day: day, State: "running", Sessions: []session{{Start: now.Add(-time.Minute)}}},
+			{ID: "first", Day: day, State: "pending", SectionID: "pm", Title: "Match first"},
+			{ID: "second", Day: day, State: "pending", SectionID: "pm"},
+		}},
+		day: day, now: now, list: true,
+	}
+	for _, tc := range []struct {
+		filter string
+		want   string
+	}{
+		{"", "running"},
+		{"match", "first"},
+		{"morning", "morning"},
+	} {
+		view := m
+		view.filter = tc.filter
+		view = sectionPress(view, 'g', 'f')
+		if target := view.target(); target == nil || target.ID != tc.want {
+			t.Errorf("filter %q: wanted %s, got %+v", tc.filter, tc.want, target)
+		}
+	}
+}
