@@ -78,11 +78,16 @@ func (m terminal) addSuggestions() []inputSuggestion {
 		return nil
 	}
 	query := strings.ToLower(body)
-	var matches []inputSuggestion
+	const limit = 5
+	var prefixes, partials []inputSuggestion
 	seen := map[string]bool{}
-	for i := len(m.data.Tasks) - 1; i >= 0 && len(matches) < 5; i-- {
+	for i := len(m.data.Tasks) - 1; i >= 0 && len(prefixes) < limit; i-- {
 		t := m.data.Tasks[i]
-		if t.Title == "" || t.Deleted || t.Day > m.day || !hasPrefixFold(t.Title, query) {
+		if t.Title == "" || t.Deleted || t.Day > m.day {
+			continue
+		}
+		isPrefix := hasPrefixFold(t.Title, query)
+		if !isPrefix && (len(partials) == limit || !containsFold(t.Title, query)) {
 			continue
 		}
 		name := strings.ToLower(t.Title)
@@ -98,10 +103,14 @@ func (m terminal) addSuggestions() []inputSuggestion {
 				// "add 10 push-ups" would read 10 as minutes; "-" keeps it a title.
 				candidate.input = "add - " + t.Title
 			}
-			matches = append(matches, candidate)
+			if isPrefix {
+				prefixes = append(prefixes, candidate)
+			} else {
+				partials = append(partials, candidate)
+			}
 		}
 	}
-	return matches
+	return append(prefixes, partials[:min(len(partials), limit-len(prefixes))]...)
 }
 
 // looksLikeEstimate reports whether add would read the word as minutes.
