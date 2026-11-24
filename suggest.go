@@ -35,6 +35,15 @@ func (m terminal) inputSuggestions() []inputSuggestion {
 		}
 		return nil
 	}
+	if words := strings.Fields(m.input); len(words) >= 3 && words[0] == "rename" {
+		prefix := "rename " + words[1] + " "
+		query := strings.Join(words[2:], " ")
+		var matches []inputSuggestion
+		for _, task := range m.matchingTaskTitles(query) {
+			matches = append(matches, inputSuggestion{label: task.Title, input: prefix + task.Title})
+		}
+		return matches
+	}
 	return m.addSuggestions()
 }
 
@@ -74,13 +83,32 @@ func (m terminal) addSuggestions() []inputSuggestion {
 			body = strings.TrimLeft(rest, " ")
 		}
 	}
-	if body == "" {
+	var matches []inputSuggestion
+	for _, t := range m.matchingTaskTitles(body) {
+		candidate := inputSuggestion{label: t.Title, input: prefix + t.Title, source: t}
+		if t.Minutes != nil {
+			candidate.label += " · " + estimateLabel(t.Minutes)
+			if !explicitEstimate {
+				candidate.input = fmt.Sprintf("add %d %s", roundedMinutes(*t.Minutes), t.Title)
+			}
+		} else if first, _, _ := strings.Cut(t.Title, " "); !explicitEstimate && looksLikeEstimate(first) {
+			// "add 10 push-ups" would read 10 as minutes; "-" keeps it a title.
+			candidate.input = "add - " + t.Title
+		}
+		matches = append(matches, candidate)
+	}
+	return matches
+}
+
+// matchingTaskTitles prefers prefix matches and keeps the newest task for each title.
+func (m terminal) matchingTaskTitles(input string) []*task {
+	query := strings.ToLower(strings.TrimLeftFunc(input, unicode.IsSpace))
+	if query == "" {
 		return nil
 	}
-	query := strings.ToLower(body)
 	const limit = 5
-	var prefixes, partials []inputSuggestion
-	seen := map[string]bool{}
+	var prefixes, partials []*task
+	seen := make(map[string]bool)
 	for i := len(m.data.Tasks) - 1; i >= 0 && len(prefixes) < limit; i-- {
 		t := m.data.Tasks[i]
 		if t.Title == "" || t.Deleted || t.Day > m.day {
@@ -91,23 +119,14 @@ func (m terminal) addSuggestions() []inputSuggestion {
 			continue
 		}
 		name := strings.ToLower(t.Title)
-		if !seen[name] {
-			seen[name] = true
-			candidate := inputSuggestion{label: t.Title, input: prefix + t.Title, source: t}
-			if t.Minutes != nil {
-				candidate.label += " · " + estimateLabel(t.Minutes)
-				if !explicitEstimate {
-					candidate.input = fmt.Sprintf("add %d %s", roundedMinutes(*t.Minutes), t.Title)
-				}
-			} else if first, _, _ := strings.Cut(t.Title, " "); !explicitEstimate && looksLikeEstimate(first) {
-				// "add 10 push-ups" would read 10 as minutes; "-" keeps it a title.
-				candidate.input = "add - " + t.Title
-			}
-			if isPrefix {
-				prefixes = append(prefixes, candidate)
-			} else {
-				partials = append(partials, candidate)
-			}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		if isPrefix {
+			prefixes = append(prefixes, t)
+		} else {
+			partials = append(partials, t)
 		}
 	}
 	return append(prefixes, partials[:min(len(partials), limit-len(prefixes))]...)

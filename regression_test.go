@@ -121,6 +121,42 @@ func TestCompletingNumericTitleKeepsItAsTitle(t *testing.T) {
 	}
 }
 
+func TestRenameCompletesTaskTitleWithoutCopyingOtherFields(t *testing.T) {
+	for _, command := range []string{"shortcut", "explicit ID"} {
+		t.Run(command, func(t *testing.T) {
+			estimate := 15.0
+			m, repo := reviewTerminal(t, []*task{
+				{ID: "target", Title: "Draft", Minutes: &estimate, Category: "work", WorkCode: "Current"},
+				{ID: "history", Title: "Review @ Office", Category: "home", WorkCode: "Previous"},
+				{ID: "partial", Title: "Team Review"},
+				{ID: "deleted", Title: "Review Later", Deleted: true},
+			})
+			if command == "shortcut" {
+				m = sectionPress(m, 'l', 'r')
+				m = typeText(m, "re")
+			} else {
+				m = sectionPress(m, ':')
+				m = typeText(m, "rename target re")
+			}
+			matches := m.inputSuggestions()
+			if len(matches) != 2 || matches[0].label != "Review @ Office" || matches[1].label != "Team Review" {
+				t.Fatalf("unexpected suggestions: %+v", matches)
+			}
+			m = sectionPress(m, tea.KeyTab, tea.KeyEnter)
+
+			s, err := repo.load(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := s.Tasks[0]
+			if target.Title != "Review @ Office" || target.Category != "work" || target.WorkCode != "Current" ||
+				target.Minutes == nil || *target.Minutes != estimate {
+				t.Fatalf("rename did not update only the title: %+v (notice: %s)", target, m.notice)
+			}
+		})
+	}
+}
+
 func TestSaveKeepsSymlinkAndMode(t *testing.T) {
 	dir := t.TempDir()
 	real := filepath.Join(dir, "real.json")

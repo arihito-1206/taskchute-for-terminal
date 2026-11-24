@@ -10,12 +10,16 @@ import (
 )
 
 func (m *terminal) edit(key tea.KeyPressMsg) {
-	matches := m.inputSuggestions()
+	name := key.String()
+	var matches []inputSuggestion
+	if name == "tab" || name == "up" || name == "down" {
+		matches = m.inputSuggestions()
+	}
 	if len(matches) > 0 {
-		switch key.String() {
+		switch name {
 		case "down", "up":
 			step := 1
-			if key.String() == "up" {
+			if name == "up" {
 				step = -1
 			}
 			m.suggestion = (m.suggestion + step + len(matches)) % len(matches)
@@ -29,7 +33,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 		}
 	}
 	m.suggestion = 0
-	switch key.String() {
+	switch name {
 	case "esc":
 		m.fieldEdit = nil
 		m.addSource = nil
@@ -99,7 +103,7 @@ func (m *terminal) edit(key tea.KeyPressMsg) {
 			args = []string{args[0], strings.TrimSpace(strings.TrimPrefix(body, args[0]))}
 		}
 		for i, arg := range args {
-			if cmd != "add" && cmd != "routine-code" && (cmd != "code" || i == 0) && arg == "@" {
+			if cmd != "add" && cmd != "routine-code" && ((cmd != "code" && cmd != "rename") || i == 0) && arg == "@" {
 				target := m.target()
 				if target == nil {
 					m.notice = "No task selected."
