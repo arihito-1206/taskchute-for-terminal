@@ -317,15 +317,18 @@ func (m terminal) render(width int) string {
 				if i == m.selected {
 					prefix = "> "
 				}
+				doneForeground := ""
 				switch {
 				case m.sectionID != "" && task.State == "running":
 					fmt.Fprintln(&b, runningBand(prefix+text, min(width, 90)))
 				case task.State == "done":
-					style := "\x1b[38;5;245m"
+					doneForeground = "\x1b[38;5;245"
+					background := ""
 					if m.sectionID != "" && i == m.selected {
-						style = "\x1b[38;5;249;48;5;237m"
+						doneForeground = "\x1b[38;5;249"
+						background = ";48;5;237"
 					}
-					fmt.Fprintln(&b, style+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
+					fmt.Fprintln(&b, doneForeground+background+"m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
 				case m.sectionID != "" && i == m.selected:
 					fmt.Fprintln(&b, "\x1b[38;5;252;48;5;237m"+ansi.Truncate(prefix+text, width, "…")+"\x1b[0m")
 				case task.State == "running":
@@ -346,7 +349,13 @@ func (m terminal) render(width int) string {
 						details = append(details, "Code "+task.WorkCode)
 					}
 					if len(details) > 0 {
-						line("           └ " + strings.Join(details, " │ "))
+						detail := "           └ " + strings.Join(details, " │ ")
+						if doneForeground != "" {
+							detail = runewidth.Truncate(terminalText(detail, false), max(1, width), "…")
+							fmt.Fprintln(&b, doneForeground+"m"+detail+"\x1b[0m")
+						} else {
+							line(detail)
+						}
 					}
 				}
 			}, capacity)
