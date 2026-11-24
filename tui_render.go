@@ -128,6 +128,33 @@ func dayEndDisplay(finish, target string, forecast output, location *time.Locati
 	return finish, "\x1b[1;34m"
 }
 
+// Filtered views still show capacity for the full section. Build the full list
+// only when a visible header needs it, and reuse it for the rest of the frame.
+func (m terminal) sectionCapacityForView(dayRows []*task, filtered bool) func(section, []*task) string {
+	var full *taskList
+	return func(s section, members []*task) string {
+		if sectionEnded(s, m.day, m.now) {
+			return ""
+		}
+		if !filtered {
+			return sectionCapacity(s, members)
+		}
+		if full == nil {
+			list := m.taskListFor(dayRows, "", false)
+			full = &list
+		}
+		if m.sectionID != "" {
+			return sectionCapacity(s, full.rows)
+		}
+		for _, group := range full.groups {
+			if group.section.ID == s.ID {
+				return sectionCapacity(s, full.rows[group.start:group.end])
+			}
+		}
+		return ""
+	}
+}
+
 func (m terminal) render(width int) string {
 	if m.mode == modeTimeline {
 		return m.timelineView(width)
@@ -261,27 +288,7 @@ func (m terminal) render(width int) string {
 		line("  s start/finish | n note | l list | L section | t timeline | a add | ? help | q quit")
 		if m.list {
 			query := m.taskFilter()
-			capacity := sectionCapacity
-			if query != "" || m.planning {
-				full := m.taskListFor(dayRows, "", false)
-				capacity = func(s section, _ []*task) string {
-					if m.sectionID != "" {
-						return sectionCapacity(s, full.rows)
-					}
-					for _, group := range full.groups {
-						if group.section.ID == s.ID {
-							return sectionCapacity(s, full.rows[group.start:group.end])
-						}
-					}
-					return ""
-				}
-			}
-			visibleCapacity := func(s section, members []*task) string {
-				if sectionEnded(s, m.day, m.now) {
-					return ""
-				}
-				return capacity(s, members)
-			}
+			visibleCapacity := m.sectionCapacityForView(dayRows, query != "" || m.planning)
 			if s, ok := sectionByID(m.app.sections, m.sectionID); ok {
 				for _, text := range sectionHeaderLines(s, visibleCapacity(s, rows), width) {
 					headerLine(text)
