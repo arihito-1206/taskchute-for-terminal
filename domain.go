@@ -317,7 +317,7 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 			sectionID = current.ID
 		}
 		s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: sectionID, Title: title, State: "pending", Minutes: estimate, Sessions: []session{}, Category: category, WorkCode: code})
-	case "start":
+	case "start", "start-contiguous":
 		if day > now.Format(dateLayout) {
 			return errors.New("cannot start a task scheduled for a future day")
 		}
@@ -357,8 +357,12 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if t == nil || t.State != "pending" {
 			return errors.New("select a pending task")
 		}
+		start := now
+		if cmd == "start-contiguous" && day == now.Format(dateLayout) {
+			start = s.contiguousStart(now)
+		}
 		t.State = "running"
-		t.Sessions = append(t.Sessions, session{Start: now})
+		t.Sessions = append(t.Sessions, session{Start: start})
 	case "interrupt":
 		if len(args) != 0 {
 			return errInvalidCommand

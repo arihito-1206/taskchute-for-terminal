@@ -57,7 +57,7 @@ func commandUsage(input string) string {
 var helpLines = func() []string {
 	lines := []string{
 		"TASKS",
-		"  s / Enter   Start or finish", "              On Done, start a copy", "  I           Interrupt with an untitled task", "  a           Add a task", "  n           Open task notes",
+		"  s / Enter   Start at the last end today, or finish now", "  Alt+s       Start now", "              On Done, start a copy", "  I           Interrupt with an untitled task", "  a           Add a task", "  n           Open task notes",
 		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task across rows or sections", "  g / G       First / last task",
 		"  f           Jump to the running task or first unstarted task in the current section",
 		"  /           Filter tasks by title or work code", "              Enter applies, Esc cancels or clears", "  dd / 3dd    Cut one / three tasks", "  p           Paste pending tasks after selection", "  U           Undo latest deletion",

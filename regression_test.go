@@ -215,3 +215,50 @@ func TestClockWakesOncePerSecond(t *testing.T) {
 		}
 	}
 }
+
+func TestStartShortcutsChooseRecordedEndOrCurrentTime(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		key        tea.KeyPressMsg
+		contiguous bool
+	}{
+		{"s", tea.KeyPressMsg{Code: 's'}, true},
+		{"Enter", tea.KeyPressMsg{Code: tea.KeyEnter}, true},
+		{"Alt+s", tea.KeyPressMsg{Code: 's', Mod: tea.ModAlt}, false},
+		{"Option+s character", tea.KeyPressMsg{Code: 'ß', Text: "ß"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Now()
+			day := now.Format(dateLayout)
+			midnight, err := time.ParseInLocation(dateLayout, day, now.Location())
+			if err != nil {
+				t.Fatal(err)
+			}
+			previousEnd := midnight.Add(now.Sub(midnight) / 2)
+			deletedEnd := now
+			repo := repository{path: filepath.Join(t.TempDir(), "tasks.json")}
+			s := &state{Schema: 1, Tasks: []*task{
+				{ID: "pending", Day: day, State: "pending"},
+				{ID: "previous", Day: day, State: "done", Sessions: []session{{Start: previousEnd.Add(-time.Minute), End: &previousEnd}}},
+				{ID: "deleted", Day: day, State: "done", Deleted: true, Sessions: []session{{Start: previousEnd, End: &deletedEnd}}},
+			}}
+			if err := repo.save(s); err != nil {
+				t.Fatal(err)
+			}
+			m := terminal{app: application{store: repo}, data: s, now: now, day: day}
+			next, _ := m.Update(test.key)
+			m = next.(terminal)
+			running := m.data.running()
+			if running == nil || running.ID != "pending" {
+				t.Fatalf("pending task did not start: %s", m.notice)
+			}
+			start := running.Sessions[0].Start
+			if test.contiguous && !start.Equal(previousEnd) {
+				t.Fatalf("start = %s, want previous end %s", start, previousEnd)
+			}
+			if !test.contiguous && (start.Before(now) || start.After(time.Now())) {
+				t.Fatalf("start = %s, want the current time", start)
+			}
+		})
+	}
+}

@@ -250,14 +250,20 @@ func (m *terminal) normalKey(key string) bool {
 		m.execute("paste", args...)
 	case "I":
 		m.execute("interrupt")
-	case "s", "enter":
+	case "s", "enter", "alt+s", "ß":
 		if target == nil {
 			m.notice = "No task selected."
 			break
 		}
-		if target.State == "running" {
+		if target.State == "running" && (key == "s" || key == "enter") {
 			m.execute("done")
-		} else if m.execute("start", target.ID) && (target.State == "done" || target.legacyPaused()) {
+			break
+		}
+		cmd := "start"
+		if key == "s" || key == "enter" {
+			cmd = "start-contiguous"
+		}
+		if m.execute(cmd, target.ID) && (target.State == "done" || target.legacyPaused()) {
 			for i, row := range m.visibleRows() {
 				if row.State == "running" {
 					m.selected = i

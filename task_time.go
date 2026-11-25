@@ -6,6 +6,29 @@ import (
 	"time"
 )
 
+// contiguousStart uses the latest recorded end on the current local day.
+func (s *state) contiguousStart(now time.Time) time.Time {
+	year, month, day := now.Date()
+	midnight := time.Date(year, month, day, 0, 0, 0, 0, now.Location())
+	var latest time.Time
+	for _, task := range s.Tasks {
+		if task.Deleted {
+			continue
+		}
+		for _, interval := range task.Sessions {
+			end := interval.End
+			if end != nil && !interval.Start.IsZero() && !end.Before(interval.Start) &&
+				!end.Before(midnight) && !end.After(now) && end.After(latest) {
+				latest = *end
+			}
+		}
+	}
+	if latest.IsZero() {
+		return now
+	}
+	return latest
+}
+
 func (s *state) setStart(t *task, args []string, now time.Time) error {
 	if len(args) != 1 {
 		return errInvalidCommand
