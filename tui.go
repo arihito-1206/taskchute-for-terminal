@@ -92,19 +92,25 @@ func (m *terminal) executeDay(day, cmd string, args ...string) bool {
 	if day != m.day {
 		s.fill(m.day)
 	}
+	switching := m.list && (cmd == "start" || cmd == "start-contiguous") && m.data.running() != nil
 	m.data = s
-	if cmd == "interrupt" {
+	switch cmd {
+	case "interrupt", "start", "start-contiguous":
 		running := s.running()
-		m.day, m.pinned = running.Day, false
+		if cmd == "interrupt" {
+			m.day, m.pinned = running.Day, false
+		}
 		if m.list {
-			if taskIndex(m.visibleRows(), running.ID) < 0 {
+			if (cmd == "interrupt" || switching) && taskIndex(m.visibleRows(), running.ID) < 0 {
 				m.filter, m.sectionID = "", ""
 			}
 			m.selectTask(running.ID)
 			m.scroll()
 		}
-	} else if selected != nil {
-		m.selectTask(selected.ID)
+	default:
+		if selected != nil {
+			m.selectTask(selected.ID)
+		}
 	}
 	m.notice = "Saved"
 	return true

@@ -263,14 +263,7 @@ func (m *terminal) normalKey(key string) bool {
 		if key == "s" || key == "enter" {
 			cmd = "start-contiguous"
 		}
-		if m.execute(cmd, target.ID) && (target.State == "done" || target.legacyPaused()) {
-			for i, row := range m.visibleRows() {
-				if row.State == "running" {
-					m.selected = i
-					break
-				}
-			}
-		}
+		m.execute(cmd, target.ID)
 	case "U":
 		if m.list {
 			m.execute("undo-delete")

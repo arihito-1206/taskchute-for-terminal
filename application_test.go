@@ -536,6 +536,49 @@ func TestInterruptRemainingWork(t *testing.T) {
 	}
 }
 
+func TestStartSwitchesTasksAtCurrentTime(t *testing.T) {
+	for _, cmd := range []string{"start", "start-contiguous"} {
+		t.Run(cmd, func(t *testing.T) {
+			now := time.Date(2026, 11, 26, 12, 0, 15, 0, time.UTC)
+			day := now.Format(dateLayout)
+			estimate := 30.0
+			previousEnd := now.Add(-30 * time.Minute)
+			current := &task{
+				ID: "work", Day: day, State: "running", Title: "Code", Minutes: &estimate, WorkCode: "abc",
+				Notes: []note{{Text: "history"}}, Sessions: []session{
+					{Start: previousEnd.Add(-5 * time.Minute), End: &previousEnd},
+					{Start: now.Add(-12 * time.Minute)},
+				},
+			}
+			next := &task{ID: "next", Day: day, State: "pending"}
+			s := state{Tasks: []*task{current, next}}
+			for _, invalid := range []string{"missing", current.ID} {
+				if err := s.apply(day, cmd, []string{invalid}, now, nil); err == nil {
+					t.Fatalf("start accepted invalid target %q", invalid)
+				}
+				if len(s.Tasks) != 2 || current.State != "running" || current.Sessions[1].End != nil {
+					t.Fatal("invalid start changed the running task")
+				}
+			}
+			if err := s.apply(day, cmd, []string{next.ID}, now, nil); err != nil {
+				t.Fatal(err)
+			}
+			if len(s.Tasks) != 3 || current.State != "done" || current.Sessions[1].End == nil ||
+				!current.Sessions[1].End.Equal(now) || len(current.Notes) != 1 || *current.Minutes != 30 {
+				t.Fatalf("invalid original task after switch: %+v", current)
+			}
+			rest := firstPending(s.rows(day))
+			if rest == nil || rest.ID == current.ID || rest.Title != current.Title || rest.WorkCode != current.WorkCode ||
+				rest.Minutes == nil || *rest.Minutes != 13 || len(rest.Sessions)+len(rest.Notes) != 0 {
+				t.Fatalf("invalid remainder after switch: %+v", rest)
+			}
+			if s.running() != next || len(next.Sessions) != 1 || !next.Sessions[0].Start.Equal(now) {
+				t.Fatalf("invalid new running task: %+v", next)
+			}
+		})
+	}
+}
+
 func TestAddAndInterruptUseCurrentSection(t *testing.T) {
 	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
 	day := now.Format(dateLayout)

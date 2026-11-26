@@ -324,9 +324,6 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 		if len(args) > 1 {
 			return errInvalidCommand
 		}
-		if s.running() != nil {
-			return errors.New("finish the running task first")
-		}
 		rows := s.rows(day)
 		var t *task
 		if len(args) == 1 {
@@ -343,23 +340,34 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 				}
 			}
 		}
-		if t != nil && (t.State == "done" || t.legacyPaused()) {
+		if t == nil {
+			return errors.New("select a pending task")
+		}
+		current := s.running()
+		if t == current {
+			return errors.New("task is already running")
+		}
+		if t.State != "pending" && t.State != "done" {
+			return errors.New("select a pending task")
+		}
+
+		start := now
+		if current != nil {
+			if err := s.queueRemainingWork(current, now, sections); err != nil {
+				return err
+			}
+		} else if cmd == "start-contiguous" && day == now.Format(dateLayout) {
+			start = s.contiguousStart(now)
+		}
+		if t.State == "done" || t.legacyPaused() {
 			// Keep execution history on the original task.
 			t.State = "done"
 			copy := *t
 			copy.ID = identifier()
-			copy.State = "pending"
 			copy.Sessions = nil
 			copy.Notes = nil
 			t = &copy
 			s.Tasks = append(s.Tasks, t)
-		}
-		if t == nil || t.State != "pending" {
-			return errors.New("select a pending task")
-		}
-		start := now
-		if cmd == "start-contiguous" && day == now.Format(dateLayout) {
-			start = s.contiguousStart(now)
 		}
 		t.State = "running"
 		t.Sessions = append(t.Sessions, session{Start: start})
@@ -445,7 +453,15 @@ func (s *state) apply(day, cmd string, args []string, now time.Time, sections []
 }
 
 func (s *state) interrupt(now time.Time, sections []section) error {
-	current := s.running()
+	if err := s.queueRemainingWork(s.running(), now, sections); err != nil {
+		return err
+	}
+	slot, _ := sectionAt(sections, now)
+	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: now.Format(dateLayout), SectionID: slot.ID, State: "running", Sessions: []session{{Start: now}}})
+	return nil
+}
+
+func (s *state) queueRemainingWork(current *task, now time.Time, sections []section) error {
 	if current == nil || len(current.Sessions) == 0 {
 		return errors.New("no task is running")
 	}
@@ -467,7 +483,6 @@ func (s *state) interrupt(now time.Time, sections []section) error {
 	}
 	last.End, current.State = &now, "done"
 	s.Tasks = slices.Insert(s.Tasks, 0, &rest)
-	s.Tasks = append(s.Tasks, &task{ID: identifier(), Day: day, SectionID: slot.ID, State: "running", Sessions: []session{{Start: now}}})
 	return nil
 }
 
