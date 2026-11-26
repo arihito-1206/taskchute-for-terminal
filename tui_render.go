@@ -130,8 +130,7 @@ func dayEndDisplay(finish, target string, forecast output, location *time.Locati
 
 // Filtered views still show capacity for the full section. Build the full list
 // only when a visible header needs it, and reuse it for the rest of the frame.
-func (m terminal) sectionCapacityForView(dayRows []*task, filtered bool) func(section, []*task) string {
-	var full *taskList
+func (m terminal) sectionCapacityForView(fullDayList func() taskList, filtered bool) func(section, []*task) string {
 	return func(s section, members []*task) string {
 		if sectionEnded(s, m.day, m.now) {
 			return ""
@@ -139,13 +138,7 @@ func (m terminal) sectionCapacityForView(dayRows []*task, filtered bool) func(se
 		if !filtered {
 			return sectionCapacity(s, members)
 		}
-		if full == nil {
-			list := m.taskListFor(dayRows, "", false)
-			full = &list
-		}
-		if m.sectionID != "" {
-			return sectionCapacity(s, full.rows)
-		}
+		full := fullDayList()
 		for _, group := range full.groups {
 			if group.section.ID == s.ID {
 				return sectionCapacity(s, full.rows[group.start:group.end])
@@ -288,14 +281,40 @@ func (m terminal) render(width int) string {
 		line("  s start/finish | n note | l list | L section | t timeline | a add | ? help | q quit")
 		if m.list {
 			query := m.taskFilter()
-			visibleCapacity := m.sectionCapacityForView(dayRows, query != "" || m.planning)
+			filtered := query != "" || m.planning
+			var fullDay *taskList
+			fullDayList := func() taskList {
+				if !filtered && m.sectionID == "" {
+					return list
+				}
+				if fullDay == nil {
+					unfiltered := m
+					unfiltered.sectionID = ""
+					full := unfiltered.taskListFor(dayRows, "", false)
+					fullDay = &full
+				}
+				return *fullDay
+			}
+			visibleCapacity := m.sectionCapacityForView(fullDayList, filtered)
 			if s, ok := sectionByID(m.app.sections, m.sectionID); ok {
 				for _, text := range sectionHeaderLines(s, visibleCapacity(s, rows), width) {
 					headerLine(text)
 				}
 			}
-			titleWidth := max(8, min(60, width-56))
-			line(fmt.Sprintf("  %-7s  %-*s     EST  %-11s  %-11s  ELAPSED", "STATE", titleWidth, "TASK", "START", "END"))
+			const fixedColumns = 56
+			const forecastWidth = 12 // Also fits a date when the estimate crosses midnight.
+			otherColumns := fixedColumns
+			forecastHeader := ""
+			var starts map[string]time.Time
+			if m.day == m.now.Format(dateLayout) && width >= fixedColumns+forecastWidth+2+8 {
+				otherColumns += forecastWidth + 2
+				forecastHeader = fmt.Sprintf("%-*s  ", forecastWidth, "FORECAST")
+				if forecast.Available {
+					starts = expectedStarts(fullDayList().rows, running, m.now)
+				}
+			}
+			titleWidth := max(8, min(60, width-otherColumns))
+			line(fmt.Sprintf("  %-7s  %-*s     EST  %s%-11s  %-11s  ELAPSED", "STATE", titleWidth, "TASK", forecastHeader, "START", "END"))
 			if m.mode == modeSearch {
 				input, _ := m.commandLine(width)
 				if hint := fmt.Sprintf("  %d matches | Enter apply · Esc cancel", len(rows)); ansi.StringWidth(input)+ansi.StringWidth(hint) <= width {
@@ -319,7 +338,18 @@ func (m terminal) render(width int) string {
 				if task.WorkCode != "" {
 					codeLabel = "🔖"
 				}
-				text := row(task, m.day, m.now, titleWidth, title(task), codeLabel)
+				forecastColumn := ""
+				if forecastHeader != "" {
+					label := ""
+					if task.State == "pending" && len(task.Sessions) == 0 {
+						label = "—"
+						if start, ok := starts[task.ID]; ok {
+							label = "~" + timeLabel(start, m.day, m.now.Location())
+						}
+					}
+					forecastColumn = fmt.Sprintf("%-*s  ", forecastWidth, label)
+				}
+				text := row(task, m.day, m.now, titleWidth, title(task), codeLabel, forecastColumn)
 				prefix := "  "
 				if i == m.selected {
 					prefix = "> "

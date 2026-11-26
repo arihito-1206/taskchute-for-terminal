@@ -91,7 +91,7 @@ func timeLabel(t time.Time, day string, location *time.Location) string {
 	return t.Format("15:04")
 }
 
-func row(t *task, day string, now time.Time, width int, name, codeLabel string) string {
+func row(t *task, day string, now time.Time, width int, name, codeLabel, forecastColumn string) string {
 	label := map[string]string{"pending": "Pending", "running": "Running", "done": "Done"}[t.State]
 	start, end := "-", "-"
 	if len(t.Sessions) > 0 {
@@ -116,7 +116,7 @@ func row(t *task, day string, now time.Time, width int, name, codeLabel string) 
 		}
 	}
 	name = runewidth.FillRight(name, width)
-	return fmt.Sprintf("%-7s  %s  %6s  %-11s  %-11s  %s", label, name, estimateColumn(t.Minutes), start, end, duration(elapsed(t, now)))
+	return fmt.Sprintf("%-7s  %s  %6s  %s%-11s  %-11s  %s", label, name, estimateColumn(t.Minutes), forecastColumn, start, end, duration(elapsed(t, now)))
 }
 
 type taskOutput struct {
@@ -147,6 +147,32 @@ func formatTask(t *task, now time.Time) taskOutput {
 		item.Remaining = &left
 	}
 	return item
+}
+
+// expectedStarts follows the full day's pending order after the active task.
+func expectedStarts(rows []*task, running *task, now time.Time) map[string]time.Time {
+	start := now
+	if running != nil {
+		active := formatTask(running, now)
+		if active.Remaining == nil || *active.Remaining <= 0 {
+			return nil
+		}
+		start = start.Add(time.Duration(*active.Remaining * float64(time.Second)))
+	}
+
+	starts := make(map[string]time.Time)
+	for _, task := range rows {
+		if task.State != "pending" {
+			continue
+		}
+		starts[task.ID] = start
+		item := formatTask(task, now)
+		if item.Remaining == nil {
+			break
+		}
+		start = start.Add(time.Duration(*item.Remaining * float64(time.Second)))
+	}
+	return starts
 }
 
 func (s *state) output(day string, now time.Time) output {

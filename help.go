@@ -60,6 +60,7 @@ var helpLines = func() []string {
 		"  s / Enter   Start at the last end today, or finish now", "  Alt+s       Start now", "              Starting another task queues remaining work", "              On Done, start a copy", "  I           Interrupt with an untitled task", "  a           Add a task", "  n           Open task notes",
 		"", "LIST", "  l           Toggle task list", "  t           Open timeline", "  j / k       Select next / previous", "  J / K       Move a pending task across rows or sections", "  g / G       First / last task",
 		"  f           Jump to the running task or first unstarted task in the current section",
+		"  FORECAST    Estimated start in today's task order",
 		"  /           Filter tasks by title or work code", "              Enter applies, Esc cancels or clears", "  dd / 3dd    Cut one / three tasks", "  p           Paste pending tasks after selection", "  U           Undo latest deletion",
 		"  L           Toggle current section (Esc to close)", "  b           Choose a section for the task or routine",
 		"  v then J/K  Reorder routines or move them across sections",
